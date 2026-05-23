@@ -306,8 +306,13 @@ class MomentumStrategy(TradingStrategy):
                     break
 
                 # Check if we have sufficient cash
+                max_pos_cap = config.MAX_POSITION_SIZE
+                account_val = self.ib_connection.get_account_value()
+                if getattr(config, "DYNAMIC_RISK_SCALING", True) and account_val > 0:
+                    max_pos_cap = account_val * config.MAX_PORTFOLIO_POSITION_PERCENT
+
                 position_size = min(
-                    config.MAX_POSITION_SIZE,
+                    max_pos_cap,
                     buying_funds * config.POSITION_SIZE_PERCENT
                 )
                 

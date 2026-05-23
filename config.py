@@ -40,12 +40,13 @@ TRADING_MINUTES_END = 0
 
 # Risk Management
 STARTER_ACCOUNT_MODE = _bool_env("STARTER_ACCOUNT_MODE", True)
-STARTER_ACCOUNT_CAPITAL = _float_env("STARTER_ACCOUNT_CAPITAL", 2000)
-MAX_POSITION_SIZE = _float_env("MAX_POSITION_SIZE", 100)  # Maximum dollar amount per position
-MAX_DAILY_LOSS = _float_env("MAX_DAILY_LOSS", 40)  # Stop trading if daily loss exceeds this
+STARTER_ACCOUNT_CAPITAL = _float_env("STARTER_ACCOUNT_CAPITAL", 1000)
+MAX_POSITION_SIZE = _float_env("MAX_POSITION_SIZE", 50)  # Maximum dollar amount per position
+MAX_DAILY_LOSS = _float_env("MAX_DAILY_LOSS", 20)  # Stop trading if daily loss exceeds this
 POSITION_SIZE_PERCENT = _float_env("POSITION_SIZE_PERCENT", 0.05)  # Use 5% of cash per trade
 MAX_PORTFOLIO_POSITION_PERCENT = _float_env("MAX_PORTFOLIO_POSITION_PERCENT", 0.05)
 MAX_OPEN_POSITIONS = _int_env("MAX_OPEN_POSITIONS", 1)
+DYNAMIC_RISK_SCALING = _bool_env("DYNAMIC_RISK_SCALING", True)  # Scale position sizes and risk dynamically as capital grows
 REQUIRE_SETTLED_CASH_FOR_BUYS = _bool_env("REQUIRE_SETTLED_CASH_FOR_BUYS", True)
 STOP_LOSS_PERCENT = _float_env("STOP_LOSS_PERCENT", 1.25)
 TAKE_PROFIT_PERCENT = _float_env("TAKE_PROFIT_PERCENT", 0.75)

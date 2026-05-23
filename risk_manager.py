@@ -19,19 +19,26 @@ class RiskManager:
         """Check if a trade is within risk limits"""
         position_value = quantity * entry_price
         
-        # Check individual position limit
-        if position_value > self.max_position_size:
-            logger.warning(f"Position size {position_value} exceeds max {self.max_position_size}")
-            return False
-            
         # Check account value limit
         account_value = self.ib_connection.get_account_value()
         if account_value <= 0:
             logger.warning("Account value is unavailable or zero; blocking trade")
             return False
+            
+        # Determine maximum position size limit
+        max_pos_limit = self.max_position_size
+        if getattr(config, "DYNAMIC_RISK_SCALING", True):
+            max_pos_limit = account_value * config.MAX_PORTFOLIO_POSITION_PERCENT
+            
+        # Check individual position limit
+        if position_value > max_pos_limit:
+            logger.warning(f"Position size ${position_value:.2f} exceeds limit of ${max_pos_limit:.2f}")
+            return False
+            
         if (
             config.STARTER_ACCOUNT_MODE
             and not config.PAPER_TRADING
+            and not getattr(config, "DYNAMIC_RISK_SCALING", True)
             and account_value > config.STARTER_ACCOUNT_CAPITAL * 1.5
         ):
             logger.warning("Starter mode is enabled for a larger account; blocking until risk settings are reviewed")
@@ -44,9 +51,16 @@ class RiskManager:
             logger.warning(f"Position {position_percent:.1f}% exceeds {max_percent:.1f}% limit")
             return False
             
+        # Determine maximum daily loss limit
+        max_loss_limit = self.max_daily_loss
+        if getattr(config, "DYNAMIC_RISK_SCALING", True):
+            # Scale daily loss limit relative to starter ratio (e.g. 20 / 1000 = 2% daily loss)
+            loss_percent = config.MAX_DAILY_LOSS / config.STARTER_ACCOUNT_CAPITAL
+            max_loss_limit = account_value * loss_percent
+            
         # Check daily loss
-        if self.daily_loss < -self.max_daily_loss:
-            logger.warning(f"Daily loss limit exceeded: ${self.daily_loss:.2f}")
+        if self.daily_loss < -max_loss_limit:
+            logger.warning(f"Daily loss limit exceeded: ${self.daily_loss:.2f} (Limit: ${max_loss_limit:.2f})")
             return False
             
         # Check fee efficiency
