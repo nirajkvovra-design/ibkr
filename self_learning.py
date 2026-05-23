@@ -4,6 +4,11 @@ applies dynamic blacklists (cooling-off periods), and scales position sizes dyna
 """
 
 import os
+import sys
+
+# Ensure local workspace path is in python search path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import csv
 import logging
 from datetime import datetime, timedelta
