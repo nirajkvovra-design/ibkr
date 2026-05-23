@@ -159,6 +159,16 @@ EOD_CLOSE_MINUTES_BEFORE_END = _int_env("EOD_CLOSE_MINUTES_BEFORE_END", 5)
 # Faster paper learning: more signals/trades while still using limits & journal (disable via .env)
 PAPER_LEARNING_MODE = _bool_env("PAPER_LEARNING_MODE", True)
 
+# Strategy Selection and Machine Learning Configs
+SELECTED_STRATEGY = os.getenv("SELECTED_STRATEGY", "MOMENTUM")  # MOMENTUM or ML
+ML_MODEL_TYPE = os.getenv("ML_MODEL_TYPE", "MONTE_CARLO")  # MONTE_CARLO, LSTM, or RNN
+ML_FORECAST_PERIOD = _int_env("ML_FORECAST_PERIOD", 10)  # Number of days to forecast
+ML_MONTE_CARLO_SIMULATIONS = _int_env("ML_MONTE_CARLO_SIMULATIONS", 500)  # Number of simulation paths
+ML_BUY_THRESHOLD_PERCENT = _float_env("ML_BUY_THRESHOLD_PERCENT", 1.5)  # Expected gain to BUY (e.g. 1.5%)
+ML_SELL_THRESHOLD_PERCENT = _float_env("ML_SELL_THRESHOLD_PERCENT", -1.0)  # Expected loss to SELL (e.g. -1.0%)
+ML_NEURAL_WINDOW_SIZE = _int_env("ML_NEURAL_WINDOW_SIZE", 10)  # Time window for LSTM/RNN
+ML_NEURAL_EPOCHS = _int_env("ML_NEURAL_EPOCHS", 20)  # Training epochs for dynamic neural networks
+
 
 def _apply_env_overrides(overrides):
     """Set module-level settings only when the variable is not set in .env."""

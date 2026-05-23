@@ -7,7 +7,7 @@ import pytz
 import config
 from utils import get_logger, is_market_open, format_trade_log, setup_logging, send_alert, update_health_status
 from ib_connection import InteractiveBrokersConnection
-from strategies import MomentumStrategy, GridTradingStrategy
+from strategies import MomentumStrategy, GridTradingStrategy, MachineLearningStrategy
 from risk_manager import RiskManager
 from data_fetcher import DataFetcher
 from stock_screener import StockScreener
@@ -70,8 +70,14 @@ class TradingEngine:
         starting = {sym.upper(): info.get("quantity", 0) for sym, info in positions.items()}
         daily_positions.reset_if_new_day(starting)
 
-        # Initialize strategy (you can switch between strategies here)
-        self.strategy = MomentumStrategy(self.ib_connection, self.risk_manager)
+        # Initialize strategy based on configuration
+        strategy_choice = getattr(config, "SELECTED_STRATEGY", "MOMENTUM").upper()
+        if strategy_choice == "ML":
+            self.strategy = MachineLearningStrategy(self.ib_connection, self.risk_manager)
+            logger.info(f"Instantiated MachineLearningStrategy using {config.ML_MODEL_TYPE} model.")
+        else:
+            self.strategy = MomentumStrategy(self.ib_connection, self.risk_manager)
+            logger.info("Instantiated default MomentumStrategy.")
         
         logger.info(f"Connected to account: {config.IB_ACCOUNT}")
         logger.info(f"Trading mode: {'PAPER' if config.PAPER_TRADING else 'LIVE'}")

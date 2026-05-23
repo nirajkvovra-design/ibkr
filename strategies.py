@@ -417,3 +417,114 @@ class GridTradingStrategy(TradingStrategy):
     def _get_current_price(self, symbol):
         """Get current price for a symbol"""
         return None
+
+
+class MachineLearningStrategy(MomentumStrategy):
+    """
+    Machine Learning and Stochastic Forecasting Strategy.
+    Uses Monte Carlo Geometric Brownian Motion, LSTM, or RNN models to generate signals.
+    Inherits execution and data pipeline features from MomentumStrategy.
+    """
+
+    def __init__(self, ib_connection, risk_manager=None):
+        super().__init__(ib_connection, risk_manager)
+        logger.info(f"Initialized MachineLearningStrategy with model: {config.ML_MODEL_TYPE}")
+
+    def generate_signals(self, symbols):
+        """
+        Generate trading signals using predictive ML models.
+        Returns dict with symbol -> signal ('BUY', 'SELL', or 'HOLD')
+        """
+        import ml_models
+        signals = {}
+        
+        for symbol in symbols:
+            try:
+                if symbol in config.EXCLUDED_EVENT_SENSITIVE_STOCKS:
+                    logger.warning(f"Skipping {symbol}: excluded event-sensitive stock")
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                if not self.data_fetcher.is_trade_free_us_stock_candidate(symbol):
+                    logger.warning(f"Skipping {symbol}: not in configured US free-trade stock universe")
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                calendar_risk = self.data_fetcher.get_calendar_risk(symbol)
+                if calendar_risk['blocked']:
+                    logger.warning(f"Skipping {symbol}: {calendar_risk['reason']}")
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                # Get real data from Yahoo Finance
+                data = self.data_fetcher.get_stock_data(symbol, period='3mo', interval='1d')
+                
+                if data is None or len(data) < 25:
+                    logger.warning(f"Skipping {symbol}: insufficient historical data (length={0 if data is None else len(data)})")
+                    signals[symbol] = 'HOLD'
+                    continue
+                
+                # Check news sentiment safety
+                if not self.sentiment_analyzer.should_trade_based_on_news(symbol):
+                    logger.warning(f"Skipping {symbol} due to negative news")
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                sentiment = self.sentiment_analyzer.get_news_sentiment(symbol, limit=5)
+                if config.REQUIRE_BULLISH_NEWS_FOR_BUY and sentiment != 'BULLISH':
+                    logger.info(f"Skipping {symbol}: latest news sentiment is {sentiment}, not BULLISH")
+                    signals[symbol] = 'HOLD'
+                    continue
+                
+                # Run the selected predictive model
+                model_type = config.ML_MODEL_TYPE.upper()
+                expected_return = 0.0
+                
+                if model_type == 'MONTE_CARLO':
+                    _, metrics = ml_models.MonteCarloGBMModel.simulate_gbm(
+                        data['Close'], 
+                        forecast_period=config.ML_FORECAST_PERIOD, 
+                        num_simulations=config.ML_MONTE_CARLO_SIMULATIONS
+                    )
+                    expected_return = metrics['expected_return_pct']
+                    logger.info(f"ML [Monte Carlo GBM] {symbol}: Current=${metrics['latest_actual_price']:.2f} | Expected=${metrics['expected_final_price']:.2f} | Chg={expected_return:+.2f}% | ProbProfit={metrics['probability_of_profit']:.1f}%")
+                    
+                elif model_type in ('LSTM', 'RNN'):
+                    forecaster = ml_models.LSTMForecaster if model_type == 'LSTM' else ml_models.RNNForecaster
+                    
+                    if not forecaster.is_supported():
+                        logger.warning(f"Model {model_type} is configured, but TensorFlow or scikit-learn is not installed. Falling back to Monte Carlo GBM.")
+                        _, metrics = ml_models.MonteCarloGBMModel.simulate_gbm(
+                            data['Close'], 
+                            forecast_period=config.ML_FORECAST_PERIOD, 
+                            num_simulations=config.ML_MONTE_CARLO_SIMULATIONS
+                        )
+                        expected_return = metrics['expected_return_pct']
+                        logger.info(f"ML [Monte Carlo GBM Fallback] {symbol}: Current=${metrics['latest_actual_price']:.2f} | Expected=${metrics['expected_final_price']:.2f} | Chg={expected_return:+.2f}%")
+                    else:
+                        _, metrics = forecaster.forecast_next_price(
+                            data['Close'],
+                            window_size=config.ML_NEURAL_WINDOW_SIZE,
+                            epochs=config.ML_NEURAL_EPOCHS
+                        )
+                        expected_return = metrics['expected_return_pct']
+                        logger.info(f"ML [{model_type}] {symbol}: Current=${metrics['latest_actual_price']:.2f} | Expected=${metrics['expected_final_price']:.2f} | Expected Return={expected_return:+.2f}%")
+                else:
+                    logger.error(f"Unknown ML model type configured: {model_type}. Skipping signal generation.")
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                # Generate signals based on predictive thresholds
+                if expected_return >= config.ML_BUY_THRESHOLD_PERCENT:
+                    signals[symbol] = 'BUY'
+                elif expected_return <= config.ML_SELL_THRESHOLD_PERCENT:
+                    signals[symbol] = 'SELL'
+                else:
+                    signals[symbol] = 'HOLD'
+                
+            except Exception as e:
+                logger.error(f"Error generating ML signal for {symbol}: {e}")
+                signals[symbol] = 'HOLD'
+        
+        return signals
+
