@@ -22,7 +22,9 @@ from self_learning import SelfLearningAgent
 
 logger = get_logger("engine_sentry")
 
-SENTRY_STATUS_FILE = Path(getattr(config, "HEALTH_STATUS_FILE", "trading_health.json"))
+_PROJECT_DIR = Path(__file__).resolve().parent
+SENTRY_STATUS_FILE = _PROJECT_DIR / "sentry_health.json"
+ENGINE_HEARTBEAT_FILE = _PROJECT_DIR / "trading_health.json"
 DAILY_POSITIONS_FILE = Path(getattr(config, "DAILY_POSITIONS_FILE", "daily_positions.json"))
 
 class EngineSentry:
@@ -116,6 +118,14 @@ class EngineSentry:
         tws_active = self.is_tws_online()
         engine_active = engine_control.is_engine_running()
         
+        # Parse internal engine heartbeat if available
+        heartbeat = {}
+        if ENGINE_HEARTBEAT_FILE.exists():
+            try:
+                heartbeat = json.loads(ENGINE_HEARTBEAT_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
         # Determine sentry status phase
         if not tws_active:
             self.sentry_status = "TWS_OFFLINE"
@@ -140,6 +150,9 @@ class EngineSentry:
         # Fetch positions
         positions = self.get_active_positions()
 
+        # Account ID override from active heartbeat
+        account_id = heartbeat.get("account") or config.IB_ACCOUNT or "Demo Account"
+
         status_record = {
             "ts": datetime.now().isoformat(timespec="seconds"),
             "connected": tws_active,
@@ -149,7 +162,7 @@ class EngineSentry:
             "sentry_status": self.sentry_status,
             "restart_count": self.total_restarts,
             "last_restart_time": self.last_restart_time,
-            "account": config.IB_ACCOUNT or "Demo Account",
+            "account": account_id,
             "port": self.port,
             "mode": "PAPER" if config.PAPER_TRADING else "LIVE",
             "positions": positions,

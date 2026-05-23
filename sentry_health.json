@@ -1,0 +1,73 @@
+{
+  "ts": "2026-05-23T18:33:40",
+  "connected": true,
+  "engine_running": true,
+  "engine_pid": 25800,
+  "engine_started_at": "2026-05-23T18:30:30",
+  "sentry_status": "HEALTHY",
+  "restart_count": 1,
+  "last_restart_time": "2026-05-23T18:30:24",
+  "account": "DUQ099975",
+  "port": 7497,
+  "mode": "PAPER",
+  "positions": {
+    "INTC": {
+      "quantity": 23,
+      "entry_price": 43.7599983215332,
+      "opened_at": "2026-05-23T17:42:43-04:00",
+      "order_id": 100009
+    },
+    "BAC": {
+      "quantity": 17,
+      "entry_price": 56.57019805908203,
+      "opened_at": "2026-05-23T17:42:41-04:00",
+      "order_id": 100009
+    },
+    "KO": {
+      "quantity": 12,
+      "entry_price": 81.4800033569336,
+      "opened_at": "2026-05-23T17:42:52-04:00",
+      "order_id": 100009
+    },
+    "PEP": {
+      "quantity": 3,
+      "entry_price": 150.57000732421875,
+      "opened_at": "2026-05-23T17:17:40-04:00",
+      "order_id": 100007
+    },
+    "F": {
+      "quantity": 69,
+      "entry_price": 12.974174499511719,
+      "opened_at": "2026-05-23T17:42:43-04:00",
+      "order_id": 100006
+    },
+    "V": {
+      "quantity": 3,
+      "entry_price": 328.8800048828125,
+      "opened_at": "2026-05-23T17:42:51-04:00",
+      "order_id": 100007
+    },
+    "MA": {
+      "quantity": 1,
+      "entry_price": 498.5400085449219,
+      "opened_at": "2026-05-23T17:42:51-04:00",
+      "order_id": 100005
+    }
+  },
+  "self_learning": {
+    "total_analyzed": 1,
+    "blacklisted": [],
+    "boosted": [],
+    "penalized": [],
+    "details": {
+      "F": {
+        "trades": 1,
+        "win_rate": "0.0%",
+        "pnl": "$-0.02",
+        "consecutive_losses": 1,
+        "multiplier": "1.0x",
+        "status": "NORMAL"
+      }
+    }
+  }
+}

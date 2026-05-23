@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IBKR Algorithmic Trading Engine Dashboard</title>
+  <title>IBKR Algorithmic Trading Control Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-gradient: linear-gradient(135deg, #090B10 0%, #131722 100%);
-      --card-bg: rgba(26, 32, 48, 0.65);
-      --card-border: 1px solid rgba(255, 255, 255, 0.07);
-      --card-glow-green: 0 0 20px rgba(16, 185, 129, 0.15);
-      --card-glow-violet: 0 0 20px rgba(168, 85, 247, 0.15);
+      --bg-gradient: linear-gradient(135deg, #07090E 0%, #111520 100%);
+      --card-bg: rgba(20, 26, 42, 0.65);
+      --card-border: 1px solid rgba(255, 255, 255, 0.08);
+      --card-glow-green: 0 0 25px rgba(16, 185, 129, 0.15);
+      --card-glow-violet: 0 0 25px rgba(168, 85, 247, 0.15);
       
       --color-primary: #A855F7; /* Violet */
       --color-primary-hover: #C084FC;
@@ -22,7 +22,7 @@
       --color-danger: #EF4444;  /* Red */
       --color-text-main: #F8FAFC;
       --color-text-sub: #94A3B8;
-      --color-code-bg: #0D1117;
+      --color-code-bg: #0A0D14;
       
       --font-sans: 'Outfit', sans-serif;
       --font-mono: 'Space Mono', monospace;
@@ -62,7 +62,7 @@
     }
 
     .container {
-      max-width: 1440px;
+      max-width: 1560px;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
@@ -80,7 +80,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
     }
 
     .brand-section {
@@ -115,7 +115,7 @@
     .status-group {
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      gap: 1.25rem;
     }
 
     .sentry-badge {
@@ -140,11 +140,16 @@
     /* Core Layout Grids */
     .dashboard-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 2rem;
     }
 
-    @media (max-width: 1024px) {
+    @media (max-width: 1200px) {
+      .dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 650px) {
       .dashboard-grid {
         grid-template-columns: 1fr;
       }
@@ -251,7 +256,7 @@
       gap: 2rem;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1024px) {
       .main-section {
         grid-template-columns: 1fr;
       }
@@ -373,7 +378,7 @@
       gap: 2rem;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1024px) {
       .tabs-section {
         grid-template-columns: 1fr;
       }
@@ -384,7 +389,7 @@
       border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.05);
       padding: 1rem;
-      height: 350px;
+      height: 380px;
       overflow-y: auto;
       font-family: var(--font-mono);
       font-size: 0.85rem;
@@ -415,6 +420,7 @@
       color: var(--color-text-main);
       font-family: var(--font-sans);
       outline: none;
+      font-size: 0.9rem;
     }
 
     .log-input:focus {
@@ -453,7 +459,68 @@
     }
     .banner-close-btn:hover { opacity: 1; }
 
-    /* Dynamic loading state overlays */
+    /* Interactive SVG Curve Styling */
+    .chart-container {
+      background: rgba(10, 15, 28, 0.55);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      position: relative;
+    }
+
+    .chart-svg {
+      width: 100%;
+      height: 150px;
+      overflow: visible;
+    }
+
+    .chart-line {
+      fill: none;
+      stroke: var(--color-primary);
+      stroke-width: 3;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.5));
+    }
+
+    .chart-area {
+      fill: url(#chart-gradient);
+      opacity: 0.15;
+    }
+
+    .chart-dot {
+      fill: var(--color-primary);
+      stroke: white;
+      stroke-width: 2;
+      cursor: pointer;
+      transition: r 0.2s ease;
+    }
+    .chart-dot:hover {
+      r: 6;
+    }
+
+    .chart-grid {
+      stroke: rgba(255, 255, 255, 0.05);
+      stroke-width: 1;
+      stroke-dasharray: 4, 4;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--color-primary);
+      border-radius: 4px;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.8rem;
+      color: var(--color-text-main);
+      font-family: var(--font-mono);
+      display: none;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      z-index: 50;
+    }
+
+    /* Toast overlay */
     .toast {
       position: fixed;
       bottom: 2rem;
@@ -544,7 +611,34 @@
         </div>
       </div>
 
-      <!-- CARD 2: SELF-LEARNING AGENT -->
+      <!-- CARD 2: NYC MARKET SESSION CLOCK -->
+      <div class="card">
+        <div class="card-title">
+          <span>Market Session Sentry</span>
+          <span class="card-title-icon">⏰</span>
+        </div>
+        <div class="metrics-list">
+          <div class="metric-row">
+            <span class="metric-label">NYC Session Clock</span>
+            <span id="lblClock" class="metric-value metric-val-mono" style="font-size: 1.1rem; color: #818CF8; font-weight: 600;">--:--:-- EST</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Session Status</span>
+            <span id="lblSessionPhase" class="metric-value" style="font-weight: 700;">CLOSED</span>
+          </div>
+          <div class="metric-row" style="flex-direction: column; align-items: flex-start; gap: 0.25rem;">
+            <span class="metric-label">Geopolitical Restrictions (Energy Excluded)</span>
+            <div class="blacklist-container">
+              <span class="blacklist-tag">XOM</span>
+              <span class="blacklist-tag">CVX</span>
+              <span class="blacklist-tag">OXY</span>
+              <span class="blacklist-tag">USO</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 3: SELF-LEARNING AGENT -->
       <div class="card">
         <div class="card-title">
           <span>Self-Learning Intelligence</span>
@@ -570,7 +664,7 @@
         </div>
       </div>
 
-      <!-- CARD 3: CURRENT POSITIONS -->
+      <!-- CARD 4: PORTFOLIO POSITIONS -->
       <div class="card">
         <div class="card-title">
           <span>Today's Sessions Open</span>
@@ -618,28 +712,69 @@
         </div>
       </div>
 
-      <!-- SUB SECTION B: SYSTEM CONTROLS -->
-      <div class="card">
-        <div class="card-title">
-          <span>Manual Control Panel</span>
-          <span class="card-title-icon">⚙️</span>
-        </div>
-        <div class="control-grid">
-          <button id="btnStart" class="btn btn-start" onclick="controlAction('start')">
-            <span>▶</span> Start Trading Bot
-          </button>
-          <button id="btnStop" class="btn btn-stop" onclick="controlAction('stop')">
-            <span>■</span> Stop Trading Bot
-          </button>
-          <button id="btnRestart" class="btn btn-restart" onclick="controlAction('restart')">
-            <span>🔀</span> Request Handoff Restart
-          </button>
-          
-          <div style="margin-top: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
-            <p style="font-size: 0.8rem; color: var(--color-text-sub); margin-bottom: 0.5rem; font-weight: 500;">SENTRY WORKFLOW STATUS</p>
-            <p style="font-size: 0.85rem; line-height: 1.4;">Sentry continuously pings TWS. Clicking <strong>Start</strong> boots the engine immediately. Clicking <strong>Stop</strong> coordinates a safe, flat-position shutdown sequence.</p>
+      <!-- SUB SECTION B: SYSTEM CONTROLS & DYNAMIC CONFIG WRITER -->
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- CONTROL PANEL -->
+        <div class="card">
+          <div class="card-title">
+            <span>Manual Control Panel</span>
+            <span class="card-title-icon">⚙️</span>
+          </div>
+          <div class="control-grid">
+            <button id="btnStart" class="btn btn-start" onclick="controlAction('start')">
+              <span>▶</span> Start Trading Bot
+            </button>
+            <button id="btnStop" class="btn btn-stop" onclick="controlAction('stop')">
+              <span>■</span> Stop Trading Bot
+            </button>
+            <button id="btnRestart" class="btn btn-restart" onclick="controlAction('restart')">
+              <span>🔀</span> Request Handoff Restart
+            </button>
           </div>
         </div>
+
+        <!-- DYNAMIC CONFIG CARD -->
+        <div class="card">
+          <div class="card-title">
+            <span>Active Config Editor</span>
+            <span class="card-title-icon">✏️</span>
+          </div>
+          <div class="metrics-list" style="gap: 0.75rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+              <label class="metric-label" style="font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em;">ACTIVE STRATEGY</label>
+              <select id="cfgStrategy" class="log-input" style="padding: 0.4rem 0.75rem;">
+                <option value="MOMENTUM">MOMENTUM (Default)</option>
+                <option value="ML">MACHINE LEARNING (AI)</option>
+                <option value="PAIRS">PAIRS TRADING (Arbitrage)</option>
+                <option value="BREAKOUT">VOLATILITY BREAKOUT</option>
+                <option value="IPO">IPO MOMENTUM BREAKOUT</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 0.75rem;">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
+                <label class="metric-label" style="font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em;">MAX POSITION ($)</label>
+                <input type="number" id="cfgMaxPos" class="log-input" style="padding: 0.4rem 0.75rem;">
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
+                <label class="metric-label" style="font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em;">DAILY LOSS STOP ($)</label>
+                <input type="number" id="cfgMaxLoss" class="log-input" style="padding: 0.4rem 0.75rem;">
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.25rem;">
+              <span class="metric-label" style="font-size: 0.85rem;">Dynamic Risk Scaling</span>
+              <input type="checkbox" id="cfgRiskScaling" style="width: 18px; height: 18px; accent-color: var(--color-primary);">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="metric-label" style="font-size: 0.85rem;">Require Bullish News for Buy</span>
+              <input type="checkbox" id="cfgBullishNews" style="width: 18px; height: 18px; accent-color: var(--color-primary);">
+            </div>
+            <button id="btnSaveConfig" class="btn btn-restart" style="padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; margin-top: 0.5rem;" onclick="saveConfigUpdates()">
+              💾 Save & Apply Updates
+            </button>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -661,13 +796,28 @@
         </div>
       </div>
 
-      <!-- TRANSACTIONS JOURNAL -->
-      <div class="card">
-        <div class="card-title">
-          <span>Paper Transaction Journal</span>
-          <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Parsed from trade_history.csv</span>
+      <!-- TRANSACTIONS JOURNAL & CUMULATIVE P&L CHART -->
+      <div class="card" style="box-shadow: var(--card-glow-green);">
+        <div class="card-title" style="margin-bottom: 0.5rem;">
+          <span>Paper Transaction Journal & Performance</span>
+          <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Dynamic SVG equity curve</span>
         </div>
-        <div class="table-container" style="height: 400px; overflow-y: auto;">
+
+        <!-- CUMULATIVE P&L SVG CHART -->
+        <div class="chart-container" id="chartContainer">
+          <div class="chart-tooltip" id="chartTooltip">--</div>
+          <svg class="chart-svg" id="pnlChart" viewBox="0 0 500 150" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.3"></stop>
+                <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.0"></stop>
+              </linearGradient>
+            </defs>
+            <!-- Grid lines and curve path generated dynamically in JS -->
+          </svg>
+        </div>
+
+        <div class="table-container" style="height: 250px; overflow-y: auto;">
           <table id="journalTable">
             <thead>
               <tr>
@@ -692,6 +842,76 @@
 
     </div>
 
+    <!-- NEW BREAKOUT WATCHLIST WIDGET -->
+    <div class="card">
+      <div class="card-title">
+        <span>BreakoutWatch Scanner Dashboard</span>
+        <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Recent IPO & breakout watch candidates</span>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Company Name</th>
+              <th>Range Base Setup</th>
+              <th>Listing Base High</th>
+              <th>Current Distance</th>
+              <th>Volume Confirmation Ratio</th>
+              <th>Strategy Standard Checks</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="tr-normal">
+              <td style="font-weight:600; color:var(--color-primary);">RDDT</td>
+              <td>Reddit Inc.</td>
+              <td>Consolidation base (50 days)</td>
+              <td style="font-family:var(--font-mono);">$74.80</td>
+              <td style="color:var(--color-success); font-weight:500;">-1.2% (consolidating)</td>
+              <td style="font-family:var(--font-mono);">1.85x (Confirmed)</td>
+              <td><span class="status-badge status-badge-boosted">READY</span></td>
+            </tr>
+            <tr class="tr-normal">
+              <td style="font-weight:600; color:var(--color-primary);">ARM</td>
+              <td>ARM Holdings plc</td>
+              <td>Technical breakout (110 days)</td>
+              <td style="font-family:var(--font-mono);">$148.50</td>
+              <td style="color:var(--color-primary); font-weight:600;">+2.4% (BREAKOUT ACTIVE)</td>
+              <td style="font-family:var(--font-mono);">2.10x (Confirmed)</td>
+              <td><span class="status-badge status-badge-boosted">ACTIVE</span></td>
+            </tr>
+            <tr class="tr-normal">
+              <td style="font-weight:600; color:var(--color-primary);">ALAB</td>
+              <td>Astera Labs Inc.</td>
+              <td>Early range consolidation (35 days)</td>
+              <td style="font-family:var(--font-mono);">$86.20</td>
+              <td style="color:var(--color-warning); font-weight:500;">-5.8% (consolidating)</td>
+              <td style="font-family:var(--font-mono);">0.95x (Awaiting Spike)</td>
+              <td><span class="status-badge status-badge-normal">SCANNING</span></td>
+            </tr>
+            <tr class="tr-normal">
+              <td style="font-weight:600; color:var(--color-primary);">PLTR</td>
+              <td>Palantir Technologies</td>
+              <td>Large consolidation base</td>
+              <td style="font-family:var(--font-mono);">$44.10</td>
+              <td style="color:var(--color-success); font-weight:500;">-0.8% (Near High)</td>
+              <td style="font-family:var(--font-mono);">1.40x (Near Threshold)</td>
+              <td><span class="status-badge status-badge-boosted">READY</span></td>
+            </tr>
+            <tr class="tr-normal">
+              <td style="font-weight:600; color:var(--color-primary);">SHOP</td>
+              <td>Shopify Inc.</td>
+              <td>Base breakout</td>
+              <td style="font-family:var(--font-mono);">$92.50</td>
+              <td style="color:var(--color-warning); font-weight:500;">-4.1% (Base pullback)</td>
+              <td style="font-family:var(--font-mono);">0.75x (Thin Volume)</td>
+              <td><span class="status-badge status-badge-normal">SCANNING</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
   <!-- TOAST NOTIFICATIONS -->
@@ -700,6 +920,7 @@
   <script>
     let rawLogLines = [];
     let stateCache = {};
+    let isConfigLoaded = false;
 
     function showToast(message, type = "info") {
       const toast = document.getElementById("toast");
@@ -738,8 +959,92 @@
         } else {
           showToast(data.error || data.message || "Command rejected.", "error");
         }
-        // Force refresh state shortly after dispatching
         setTimeout(pollSystemState, 1000);
+      } catch (err) {
+        showToast(`Request failed: ${err.message}`, "error");
+      }
+    }
+
+    // Dynamic NYC session clock loop
+    function startMarketClock() {
+      setInterval(() => {
+        const options = {
+          timeZone: 'America/New_York',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        };
+        const nycTime = new Date().toLocaleTimeString('en-US', options);
+        document.getElementById("lblClock").innerText = `${nycTime} EST`;
+        
+        // Compute active session phase (9:30 AM to 4:00 PM NYC EST weekdays)
+        const nycDate = new Date(new Date().toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const day = nycDate.getDay();
+        const hrs = nycDate.getHours();
+        const mins = nycDate.getMinutes();
+        const totalMins = hrs * 60 + mins;
+        
+        const phaseLbl = document.getElementById("lblSessionPhase");
+        if (day === 0 || day === 6) {
+          phaseLbl.innerText = "WEEKEND CLOSED";
+          phaseLbl.style.color = "var(--color-text-sub)";
+        } else if (totalMins >= 570 && totalMins < 960) {
+          phaseLbl.innerText = "REGULAR SESSION OPEN";
+          phaseLbl.style.color = "var(--color-success)";
+        } else if (totalMins >= 240 && totalMins < 570) {
+          phaseLbl.innerText = "EXTENDED PRE-MARKET";
+          phaseLbl.style.color = "var(--color-warning)";
+        } else if (totalMins >= 960 && totalMins < 1200) {
+          phaseLbl.innerText = "EXTENDED AFTER-HOURS";
+          phaseLbl.style.color = "var(--color-warning)";
+        } else {
+          phaseLbl.innerText = "OVERNIGHT CLOSED";
+          phaseLbl.style.color = "var(--color-text-sub)";
+        }
+      }, 1000);
+    }
+
+    // Load active config once at boot
+    async function loadActiveConfigurations() {
+      if (isConfigLoaded) return;
+      const data = await fetchAPI("/api/config");
+      if (!data) return;
+      
+      document.getElementById("cfgStrategy").value = data.SELECTED_STRATEGY || "MOMENTUM";
+      document.getElementById("cfgMaxPos").value = data.MAX_POSITION_SIZE !== undefined ? data.MAX_POSITION_SIZE : 50;
+      document.getElementById("cfgMaxLoss").value = data.MAX_DAILY_LOSS !== undefined ? data.MAX_DAILY_LOSS : 20;
+      document.getElementById("cfgRiskScaling").checked = !!data.DYNAMIC_RISK_SCALING;
+      document.getElementById("cfgBullishNews").checked = !!data.REQUIRE_BULLISH_NEWS_FOR_BUY;
+      isConfigLoaded = true;
+    }
+
+    // Save configuration updates back to server
+    async function saveConfigUpdates() {
+      const updates = {
+        SELECTED_STRATEGY: document.getElementById("cfgStrategy").value,
+        MAX_POSITION_SIZE: parseFloat(document.getElementById("cfgMaxPos").value || 50),
+        MAX_DAILY_LOSS: parseFloat(document.getElementById("cfgMaxLoss").value || 20),
+        DYNAMIC_RISK_SCALING: document.getElementById("cfgRiskScaling").checked,
+        REQUIRE_BULLISH_NEWS_FOR_BUY: document.getElementById("cfgBullishNews").checked
+      };
+
+      showToast("Saving configurations and requesting engine restart...", "info");
+      try {
+        const res = await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: json = JSON.stringify(updates)
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message || "Configurations saved.", "success");
+          // Reset loaded flag to fetch actual memory variables on next reload
+          isConfigLoaded = false;
+          setTimeout(loadActiveConfigurations, 2000);
+        } else {
+          showToast(data.error || data.message || "Failed to save config.", "error");
+        }
       } catch (err) {
         showToast(`Request failed: ${err.message}`, "error");
       }
@@ -749,7 +1054,6 @@
     async function pollSystemState() {
       const data = await fetchAPI("/api/status");
       if (!data) {
-        // Server offline
         updateHeaderStatus(false, false, "OFFLINE");
         return;
       }
@@ -950,7 +1254,6 @@
         return;
       }
 
-      // Display logs with customized coloring
       filtered.forEach(line => {
         const row = document.createElement("div");
         row.className = "terminal-line";
@@ -969,7 +1272,6 @@
         container.appendChild(row);
       });
       
-      // Auto scroll to bottom
       container.scrollTop = container.scrollHeight;
     }
 
@@ -979,6 +1281,133 @@
       renderLogsFiltered(term, filterText);
     }
 
+    // Render cumulative vector SVG equity curve chart
+    function drawEquityCurve(history) {
+      const svg = document.getElementById("pnlChart");
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.35"></stop>
+            <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.0"></stop>
+          </linearGradient>
+        </defs>
+      `;
+
+      if (!history || history.length === 0) return;
+
+      // Extract PnLs chronologically (history array has newest first, so we reverse it for plotting)
+      const chronTrades = [...history].reverse();
+      
+      let cumulative = 0;
+      const points = [{ x: 0, y: 0, pnl: 0, label: "Start" }];
+      
+      chronTrades.forEach((trade, idx) => {
+        const pnl = parseFloat(trade.pnl || 0);
+        cumulative += pnl;
+        points.push({
+          x: idx + 1,
+          y: cumulative,
+          pnl: pnl,
+          label: `${trade.symbol} (${trade.side})`
+        });
+      });
+
+      const width = 500;
+      const height = 150;
+      const padding = 15;
+
+      const maxX = points.length - 1;
+      const yValues = points.map(p => p.y);
+      const minY = Math.min(0, ...yValues);
+      const maxY = Math.max(0, ...yValues) || 1.0;
+      const rangeY = (maxY - minY) || 1.0;
+
+      // Coordinate scaling functions
+      const getX = (x) => padding + (x / maxX) * (width - 2 * padding);
+      const getY = (y) => height - padding - ((y - minY) / rangeY) * (height - 2 * padding);
+
+      // Draw SVG gridlines
+      for (let i = 1; i <= 3; i++) {
+        const gridY = padding + (i / 4) * (height - 2 * padding);
+        const gridLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        gridLine.setAttribute("class", "chart-grid");
+        gridLine.setAttribute("x1", padding);
+        gridLine.setAttribute("y1", gridY);
+        gridLine.setAttribute("x2", width - padding);
+        gridLine.setAttribute("y2", gridY);
+        svg.appendChild(gridLine);
+      }
+
+      // Draw baseline (Y = 0)
+      const zeroY = getY(0);
+      const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      zeroLine.setAttribute("stroke", "rgba(255, 255, 255, 0.15)");
+      zeroLine.setAttribute("stroke-width", "1");
+      zeroLine.setAttribute("x1", padding);
+      zeroLine.setAttribute("y1", zeroY);
+      zeroLine.setAttribute("x2", width - padding);
+      zeroLine.setAttribute("y2", zeroY);
+      svg.appendChild(zeroLine);
+
+      // Build path strings
+      let pathD = "";
+      let areaD = `M ${getX(0)} ${zeroY} `;
+      
+      points.forEach((p, idx) => {
+        const px = getX(p.x);
+        const py = getY(p.y);
+        
+        if (idx === 0) {
+          pathD += `M ${px} ${py} `;
+        } else {
+          pathD += `L ${px} ${py} `;
+        }
+        areaD += `L ${px} ${py} `;
+      });
+
+      areaD += `L ${getX(points[points.length - 1].x)} ${zeroY} Z`;
+
+      // Render Area Gradient
+      const areaPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      areaPath.setAttribute("class", "chart-area");
+      areaPath.setAttribute("d", areaD);
+      svg.appendChild(areaPath);
+
+      // Render Stroke Line
+      const strokePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      strokePath.setAttribute("class", "chart-line");
+      strokePath.setAttribute("d", pathD);
+      svg.appendChild(strokePath);
+
+      // Render Interactive Circle Dots
+      const tooltip = document.getElementById("chartTooltip");
+      points.forEach((p) => {
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("class", "chart-dot");
+        dot.setAttribute("cx", getX(p.x));
+        dot.setAttribute("cy", getY(p.y));
+        dot.setAttribute("r", 4);
+        
+        dot.addEventListener("mouseenter", (e) => {
+          tooltip.style.display = "block";
+          tooltip.innerHTML = `<strong>${p.label}</strong><br>Cum P&L: <span style="color:${p.y >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}; font-weight:700;">$${p.y.toFixed(2)}</span>`;
+          
+          // Position tooltip
+          const rect = svg.getBoundingClientRect();
+          const dotX = getX(p.x);
+          const dotY = getY(p.y);
+          tooltip.style.left = `${(dotX / width) * rect.width - 40}px`;
+          tooltip.style.top = `${(dotY / height) * rect.height - 55}px`;
+        });
+
+        dot.addEventListener("mouseleave", () => {
+          tooltip.style.display = "none";
+        });
+
+        svg.appendChild(dot);
+      });
+    }
+
     // Fetch and render trade history
     async function pollHistory() {
       const data = await fetchAPI("/api/history");
@@ -986,6 +1415,9 @@
 
       const tbody = document.getElementById("journalTableBody");
       const h = data.history;
+
+      // Draw Cumulative SVG curve
+      drawEquityCurve(h);
 
       if (h.length === 0) {
         tbody.innerHTML = `
@@ -1021,9 +1453,11 @@
     }
 
     // Kick off loops
+    startMarketClock();
     pollSystemState();
     pollLogs();
     pollHistory();
+    setTimeout(loadActiveConfigurations, 1000); // Small buffer to ensure API loaded
     
     // Poll every 3 seconds for state and logs
     setInterval(pollSystemState, 3000);

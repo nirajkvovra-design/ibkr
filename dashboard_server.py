@@ -23,10 +23,63 @@ logger = get_logger("dashboard_server")
 
 PORT = 8050
 _PROJECT_DIR = Path(__file__).resolve().parent
-HEALTH_FILE = _PROJECT_DIR / getattr(config, "HEALTH_STATUS_FILE", "trading_health.json")
+HEALTH_FILE = _PROJECT_DIR / "sentry_health.json"
 LOG_FILE = _PROJECT_DIR / "trading_logs.txt"
 HISTORY_FILE = _PROJECT_DIR / "trade_history.csv"
 HTML_FILE = _PROJECT_DIR / "dashboard.html"
+
+def read_env_vars():
+    env_path = _PROJECT_DIR / ".env"
+    if not env_path.exists():
+        env_path = _PROJECT_DIR / ".env.example"
+        if not env_path.exists():
+            return {}
+    vars = {}
+    try:
+        content = env_path.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, val = line.split("=", 1)
+                vars[key.strip()] = val.strip()
+    except Exception:
+        pass
+    return vars
+
+def write_env_vars(updates):
+    env_path = _PROJECT_DIR / ".env"
+    if not env_path.exists():
+        example_path = _PROJECT_DIR / ".env.example"
+        if example_path.exists():
+            try:
+                env_path.write_text(example_path.read_text(encoding="utf-8"), encoding="utf-8")
+            except Exception:
+                pass
+    try:
+        content = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+        lines = content.splitlines()
+        updated_keys = set()
+        new_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key, _ = stripped.split("=", 1)
+                key = key.strip()
+                if key in updates:
+                    new_lines.append(f"{key}={updates[key]}")
+                    updated_keys.add(key)
+                    continue
+            new_lines.append(line)
+        for key, val in updates.items():
+            if key not in updated_keys:
+                new_lines.append(f"{key}={val}")
+        env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to write .env: {e}")
+        return False
 
 class DashboardHTTPHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -111,6 +164,19 @@ class DashboardHTTPHandler(BaseHTTPRequestHandler):
             self.send_json_response({"history": history[::-1]}) # Newest first
             return
 
+        # Serve active config settings
+        elif path == "/api/config":
+            env = read_env_vars()
+            config_data = {
+                "SELECTED_STRATEGY": env.get("SELECTED_STRATEGY") or getattr(config, "SELECTED_STRATEGY", "MOMENTUM"),
+                "MAX_POSITION_SIZE": float(env.get("MAX_POSITION_SIZE") or getattr(config, "MAX_POSITION_SIZE", 50)),
+                "MAX_DAILY_LOSS": float(env.get("MAX_DAILY_LOSS") or getattr(config, "MAX_DAILY_LOSS", 20)),
+                "DYNAMIC_RISK_SCALING": (env.get("DYNAMIC_RISK_SCALING") or str(getattr(config, "DYNAMIC_RISK_SCALING", True))).strip().lower() in ("1", "true", "yes"),
+                "REQUIRE_BULLISH_NEWS_FOR_BUY": (env.get("REQUIRE_BULLISH_NEWS_FOR_BUY") or str(getattr(config, "REQUIRE_BULLISH_NEWS_FOR_BUY", True))).strip().lower() in ("1", "true", "yes"),
+            }
+            self.send_json_response(config_data)
+            return
+
         else:
             self.send_error_response(404, "Endpoint not found.")
 
@@ -184,6 +250,43 @@ class DashboardHTTPHandler(BaseHTTPRequestHandler):
                 self.send_json_response({"success": True, "message": "Engine restart sequence coordinated."})
             except Exception as e:
                 self.send_json_response({"success": False, "message": f"Restart sequence fail: {e}"})
+            return
+
+        # Control API to save dynamic configurations back to .env
+        elif path == "/api/config":
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_length).decode("utf-8")
+                updates = json.loads(body)
+                
+                sanitized = {}
+                if "SELECTED_STRATEGY" in updates:
+                    sanitized["SELECTED_STRATEGY"] = str(updates["SELECTED_STRATEGY"]).upper()
+                if "MAX_POSITION_SIZE" in updates:
+                    sanitized["MAX_POSITION_SIZE"] = str(float(updates["MAX_POSITION_SIZE"]))
+                if "MAX_DAILY_LOSS" in updates:
+                    sanitized["MAX_DAILY_LOSS"] = str(float(updates["MAX_DAILY_LOSS"]))
+                if "DYNAMIC_RISK_SCALING" in updates:
+                    sanitized["DYNAMIC_RISK_SCALING"] = "True" if updates["DYNAMIC_RISK_SCALING"] else "False"
+                if "REQUIRE_BULLISH_NEWS_FOR_BUY" in updates:
+                    sanitized["REQUIRE_BULLISH_NEWS_FOR_BUY"] = "True" if updates["REQUIRE_BULLISH_NEWS_FOR_BUY"] else "False"
+
+                logger.info(f"Writing dynamic configuration updates to .env: {sanitized}")
+                
+                if write_env_vars(sanitized):
+                    is_running = engine_control.is_engine_running()
+                    restart_msg = ""
+                    if is_running:
+                        engine_control.request_restart()
+                        restart_msg = " Updates saved and engine hot-restart coordinated successfully!"
+                    else:
+                        restart_msg = " Updates saved successfully! They will apply on the next engine boot."
+                        
+                    self.send_json_response({"success": True, "message": f"Configurations saved successfully.{restart_msg}"})
+                else:
+                    self.send_json_response({"success": False, "message": "Failed to write updates to .env file."})
+            except Exception as e:
+                self.send_json_response({"success": False, "message": f"Error updating configurations: {e}"})
             return
 
         else:
