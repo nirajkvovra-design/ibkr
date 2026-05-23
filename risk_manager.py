@@ -15,24 +15,37 @@ class RiskManager:
         self.stop_loss_prices = {}
         self.take_profit_prices = {}
         
+        # Instantiate Self-Learning feedback loop
+        from self_learning import SelfLearningAgent
+        self.learning_agent = SelfLearningAgent()
+        
     def is_within_limits(self, symbol, quantity, entry_price):
         """Check if a trade is within risk limits"""
         position_value = quantity * entry_price
         
+        # 1. Check self-learning blacklist/cooling-off
+        if self.learning_agent.is_blacklisted(symbol):
+            logger.warning(f"[Risk Sentry] Trade for {symbol} blocked by self-learned cooling-off blacklist.")
+            return False
+            
         # Check account value limit
         account_value = self.ib_connection.get_account_value()
         if account_value <= 0:
             logger.warning("Account value is unavailable or zero; blocking trade")
             return False
             
-        # Determine maximum position size limit
-        max_pos_limit = self.max_position_size
+        # 2. Determine maximum position size limit (scaled by self-learning performance metrics)
+        learning_multiplier = self.learning_agent.get_sizing_multiplier(symbol)
+        max_pos_limit = self.max_position_size * learning_multiplier
         if getattr(config, "DYNAMIC_RISK_SCALING", True):
-            max_pos_limit = account_value * config.MAX_PORTFOLIO_POSITION_PERCENT
+            max_pos_limit = account_value * config.MAX_PORTFOLIO_POSITION_PERCENT * learning_multiplier
+            
+        if learning_multiplier != 1.0:
+            logger.info(f"[Self-Learning Sentry] Sizing multiplier for {symbol} is {learning_multiplier}x (Max Pos: ${max_pos_limit:.2f})")
             
         # Check individual position limit
         if position_value > max_pos_limit:
-            logger.warning(f"Position size ${position_value:.2f} exceeds limit of ${max_pos_limit:.2f}")
+            logger.warning(f"Position size ${position_value:.2f} exceeds learned limit of ${max_pos_limit:.2f}")
             return False
             
         if (

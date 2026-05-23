@@ -118,6 +118,33 @@ def print_report():
                 ex.get("price"),
             ))
 
+    # Print Self-Learning Insights
+    try:
+        from self_learning import SelfLearningAgent
+        learning_agent = SelfLearningAgent()
+        learning_summary = learning_agent.get_learning_summary()
+        
+        print("\n=== Self-Learning Dynamic Adaptation ===\n")
+        print("Analyzed Tickers  : %s" % learning_summary["total_analyzed"])
+        
+        if learning_summary["blacklisted"]:
+            print("  🚫 Cooling-off (Blacklisted) : %s" % ", ".join(learning_summary["blacklisted"]))
+        if learning_summary["boosted"]:
+            print("  🏆 High-Performance Boosted   : %s" % ", ".join(learning_summary["boosted"]))
+        if learning_summary["penalized"]:
+            print("  ⚠️ Low-Performance Penalized : %s" % ", ".join(learning_summary["penalized"]))
+            
+        if learning_summary["details"]:
+            print("\n  Learned Asset Matrix:")
+            print("    %-8s | %-6s | %-8s | %-12s | %-10s | %-12s" % ("Ticker", "Trades", "Win Rate", "Net Return", "Consec Loss", "Risk Status"))
+            print("    " + "-" * 66)
+            for sym, d in learning_summary["details"].items():
+                print("    %-8s | %-6s | %-8s | %-12s | %-10s | %-12s" % (
+                    sym, d["trades"], d["win_rate"], d["pnl"], d["consecutive_losses"], d["status"]
+                ))
+    except Exception as e:
+        print("\nSelf-learning module diagnostic skipped: %s" % e)
+
     print("\n=== Live readiness (%s days, %s fills required) ===\n" % (
         config.PAPER_MIN_SESSION_DAYS,
         config.PAPER_MIN_EXECUTIONS,
