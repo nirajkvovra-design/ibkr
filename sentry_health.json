@@ -1,10 +1,10 @@
 {
-  "ts": "2026-05-23T18:33:40",
-  "connected": true,
+  "ts": "2026-05-23T18:40:38",
+  "connected": false,
   "engine_running": true,
   "engine_pid": 25800,
   "engine_started_at": "2026-05-23T18:30:30",
-  "sentry_status": "HEALTHY",
+  "sentry_status": "TWS_OFFLINE",
   "restart_count": 1,
   "last_restart_time": "2026-05-23T18:30:24",
   "account": "DUQ099975",
