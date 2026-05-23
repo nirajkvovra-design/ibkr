@@ -709,3 +709,83 @@ class VolatilityBreakoutStrategy(MomentumStrategy):
         return signals
 
 
+class IPOBreakoutStrategy(MomentumStrategy):
+    """
+    IPO Momentum Breakout & Chart Reading Strategy.
+    Identifies newly listed stocks breaking out of range highs on expanding volume
+    and utilizes a trailing 10-day EMA for support exits.
+    """
+
+    def __init__(self, ib_connection, risk_manager=None):
+        super().__init__(ib_connection, risk_manager)
+        logger.info(f"Initialized IPOBreakoutStrategy. Max listing age: {config.IPO_MAX_HISTORY_DAYS} days.")
+
+    def generate_signals(self, symbols):
+        """Generate IPO momentum signals based on stock chart breakouts"""
+        signals = {}
+        
+        for symbol in symbols:
+            try:
+                if symbol in config.EXCLUDED_EVENT_SENSITIVE_STOCKS:
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                if not self.data_fetcher.is_trade_free_us_stock_candidate(symbol):
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                # Fetch quotes (6 months)
+                data = self.data_fetcher.get_stock_data(symbol, period='6mo', interval='1d')
+                
+                if data is None or len(data) < config.IPO_MIN_BASE_DAYS:
+                    signals[symbol] = 'HOLD'
+                    continue
+                
+                # Sieve IPO criteria: must have fewer than max history days
+                history_days = len(data)
+                if history_days > config.IPO_MAX_HISTORY_DAYS:
+                    logger.debug(f"Skipping {symbol} IPO Strategy: listing age is {history_days} days (exceeds cap of {config.IPO_MAX_HISTORY_DAYS})")
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                # Check news sentiment safety
+                if not self.sentiment_analyzer.should_trade_based_on_news(symbol):
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                close = data['Close']
+                high = data['High']
+                volume_ratio = data.get('Volume_Ratio', 1.0)
+
+                latest_close = float(close.iloc[-1])
+                
+                # Check for listing high (excluding first 2 days to bypass extreme listing day frenzy)
+                if history_days <= 3:
+                    logger.info(f"Skipping {symbol} IPO: forming early base (age: {history_days} days)")
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                listing_high = high.iloc[2:-1].max()
+                
+                # Compute 10-day Exponential Moving Average (EMA) as support
+                ema_10 = close.ewm(span=10, adjust=False).mean()
+                latest_ema = float(ema_10.iloc[-1])
+
+                logger.info(f"IPO Chart Sentry [{symbol}]: Price=${latest_close:.2f} | Base High=${listing_high:.2f} | 10D-EMA=${latest_ema:.2f} | VolRatio={volume_ratio:.2f}x")
+
+                # Trigger BUY on breakout over maximum base high on expanding volume
+                if latest_close >= listing_high and volume_ratio is not None and float(volume_ratio) >= config.IPO_BREAKOUT_VOLUME_RATIO and latest_close >= latest_ema:
+                    signals[symbol] = 'BUY'
+                # Trigger SELL on cross under 10-day EMA support
+                elif latest_close < latest_ema:
+                    signals[symbol] = 'SELL'
+                else:
+                    signals[symbol] = 'HOLD'
+
+            except Exception as e:
+                logger.error(f"Error checking IPO breakout for {symbol}: {e}")
+                signals[symbol] = 'HOLD'
+
+        return signals
+
+

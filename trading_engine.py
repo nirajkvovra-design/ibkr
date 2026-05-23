@@ -7,7 +7,7 @@ import pytz
 import config
 from utils import get_logger, is_market_open, format_trade_log, setup_logging, send_alert, update_health_status
 from ib_connection import InteractiveBrokersConnection
-from strategies import MomentumStrategy, GridTradingStrategy, MachineLearningStrategy, PairsTradingStrategy, VolatilityBreakoutStrategy
+from strategies import MomentumStrategy, GridTradingStrategy, MachineLearningStrategy, PairsTradingStrategy, VolatilityBreakoutStrategy, IPOBreakoutStrategy
 from risk_manager import RiskManager
 from data_fetcher import DataFetcher
 from stock_screener import StockScreener
@@ -81,6 +81,9 @@ class TradingEngine:
         elif strategy_choice == "BREAKOUT":
             self.strategy = VolatilityBreakoutStrategy(self.ib_connection, self.risk_manager)
             logger.info("Instantiated VolatilityBreakoutStrategy.")
+        elif strategy_choice == "IPO":
+            self.strategy = IPOBreakoutStrategy(self.ib_connection, self.risk_manager)
+            logger.info("Instantiated IPOBreakoutStrategy (Stock Chart Base Breakout).")
         else:
             self.strategy = MomentumStrategy(self.ib_connection, self.risk_manager)
             logger.info("Instantiated default MomentumStrategy.")

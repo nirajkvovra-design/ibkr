@@ -182,6 +182,11 @@ PAIRS_EXIT_ZSCORE = _float_env("PAIRS_EXIT_ZSCORE", 0.0)  # Standard deviations 
 BREAKOUT_LOOKBACK = _int_env("BREAKOUT_LOOKBACK", 20)  # Donchian channel lookback window
 BREAKOUT_ATR_MULTIPLIER = _float_env("BREAKOUT_ATR_MULTIPLIER", 1.5)  # Volatility ATR channel expander
 
+# IPO Momentum Breakout Configurations
+IPO_MAX_HISTORY_DAYS = _int_env("IPO_MAX_HISTORY_DAYS", 120)  # Max trading days to be considered a new listing
+IPO_MIN_BASE_DAYS = _int_env("IPO_MIN_BASE_DAYS", 5)  # Min trading days to form an initial price base
+IPO_BREAKOUT_VOLUME_RATIO = _float_env("IPO_BREAKOUT_VOLUME_RATIO", 1.5)  # Volume ratio for breakout confirmation
+
 
 
 def _apply_env_overrides(overrides):

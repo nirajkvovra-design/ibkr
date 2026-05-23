@@ -43,6 +43,8 @@ class StockScreener:
                     logger.info("News-trending empty; falling back to default watchlist")
                     return self._screen_default()
                 return symbols
+            elif method == 'ipo':
+                return self._screen_ipo_momentum()
             elif method == 'technical':
                 return self._screen_technical()
             elif method == 'fundamental':
@@ -374,3 +376,86 @@ class StockScreener:
         except Exception as e:
             logger.error(f"Error generating report: {e}")
             return None
+
+    def _screen_ipo_momentum(self):
+        """
+        Scan recently listed companies (IPOs) showing stock chart breakouts.
+        Checks built-in recent listings pool along with configured lists.
+        """
+        logger.info("Starting IPO momentum breakout screening...")
+        candidates = []
+
+        # High-potential recent listings pool
+        recent_listings = ["RDDT", "ARM", "ALAB", "BIRK", "CART", "KVUE"]
+        
+        # Combine with default watchlist for thoroughness
+        scan_pool = list(set(recent_listings + self.default_stocks))
+
+        for symbol in scan_pool:
+            try:
+                if symbol in config.EXCLUDED_EVENT_SENSITIVE_STOCKS:
+                    continue
+                if not self.data_fetcher.is_trade_free_us_stock_candidate(symbol):
+                    continue
+
+                # Fetch 6-month historical prices
+                data = self.data_fetcher.get_stock_data(symbol, period='6mo', interval='1d')
+                if data is None or len(data) < config.IPO_MIN_BASE_DAYS:
+                    continue
+
+                history_days = len(data)
+                # Ensure it meets listing age filters (IPOs only)
+                if history_days > config.IPO_MAX_HISTORY_DAYS:
+                    continue
+
+                # Ignore early listing frenzy
+                if history_days <= 3:
+                    continue
+
+                close = data['Close']
+                high = data['High']
+                volume_ratio = data.get('Volume_Ratio', 1.0)
+
+                latest_close = float(close.iloc[-1])
+                listing_high = high.iloc[2:-1].max()
+
+                # Score based on chart breakout and volume expansion
+                score = 0
+                reasons = []
+
+                if latest_close >= listing_high:
+                    score += 4
+                    reasons.append("Base High Breakout")
+                if volume_ratio is not None and float(volume_ratio) >= config.IPO_BREAKOUT_VOLUME_RATIO:
+                    score += 2
+                    reasons.append(f"Volume Expansion ({volume_ratio:.2f}x)")
+
+                ema_10 = close.ewm(span=10, adjust=False).mean()
+                latest_ema = float(ema_10.iloc[-1])
+                if latest_close >= latest_ema:
+                    score += 1
+                    reasons.append("Above 10D-EMA Support")
+
+                if score >= 3:
+                    candidates.append({
+                        'symbol': symbol,
+                        'score': score,
+                        'price': latest_close,
+                        'reasons': reasons
+                    })
+                    logger.info(f"IPO Candidate Found [{symbol}]: Price=${latest_close:.2f} | Score={score} ({', '.join(reasons)})")
+
+            except Exception as e:
+                logger.debug(f"Error screening IPO candidate {symbol}: {e}")
+                continue
+
+        candidates.sort(key=lambda x: x['score'], reverse=True)
+        final_symbols = [c['symbol'] for c in candidates[:config.MAX_WATCHLIST_SIZE]]
+        
+        if not final_symbols:
+            # Fallback to recent listings list if no active breakout is triggering today
+            final_symbols = [s for s in recent_listings if self.data_fetcher.is_trade_free_us_stock_candidate(s)][:config.MAX_WATCHLIST_SIZE]
+            logger.info(f"No active IPO breakouts triggered today. Using recent listings fallback: {final_symbols}")
+            
+        logger.info(f"IPO screening finalized: {final_symbols}")
+        return final_symbols
