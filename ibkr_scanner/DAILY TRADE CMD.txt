@@ -1,0 +1,2 @@
+python auto_day_trader.py --continuous-session --session-duration 390 --max-daily-loss 3.0 --position-size 2.0 --trailing-stop 2.0 --max-positions 5 --auto-execute --account-value 10000
+

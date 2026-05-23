@@ -1,0 +1,22 @@
+# Core Interactive Brokers API
+ibapi>=10.19.1
+ib-async>=0.9.86
+
+# Data Analysis and Processing
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Time Zone Handling
+pytz>=2022.1
+
+# Async Support
+asyncio
+
+# Standard Library (included with Python)
+# argparse
+# json
+# os
+# time
+# datetime
+# threading
+# typing

@@ -1,0 +1,58 @@
+{
+  "connection": {
+    "host": "127.0.0.1",
+    "paper_port": 7497,
+    "live_port": 7496,
+    "client_id": 1,
+    "timeout": 30
+  },
+  "scanner": {
+    "default_preset": "day_trading",
+    "default_interval": "5min",
+    "default_min_score": 70,
+    "default_max_results": 20,
+    "default_min_price": 5.0,
+    "scan_codes": [
+      "MOST_ACTIVE",
+      "TOP_PERC_GAIN",
+      "HOT_BY_VOLUME",
+      "TOP_PERC_LOSE"
+    ]
+  },
+  "auto_trader": {
+    "max_daily_loss": 3.0,
+    "position_size": 2.0,
+    "trailing_stop": 2.0,
+    "max_positions": 5,
+    "session_duration": 390,
+    "auto_close_time": "16:00"
+  },
+  "risk_management": {
+    "max_account_risk": 5.0,
+    "max_position_risk": 2.0,
+    "stop_loss_percentage": 2.0,
+    "take_profit_percentage": 4.0,
+    "max_drawdown": 10.0
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/scanner.log",
+    "max_size": "10MB",
+    "backup_count": 5
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "username": "",
+      "password": "",
+      "to_addresses": []
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "",
+      "timeout": 10
+    }
+  }
+}

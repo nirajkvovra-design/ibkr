@@ -1,0 +1,63 @@
+{
+  "timestamp": "2024-01-15T09:30:00Z",
+  "scanner_settings": {
+    "preset": "day_trading",
+    "interval": "5min",
+    "min_score": 70,
+    "max_results": 20,
+    "min_price": 5.0
+  },
+  "long_opportunities": [
+    {
+      "symbol": "AAPL",
+      "rank": 1,
+      "score": 85,
+      "signals": [
+        "MACD_Bullish_Cross",
+        "RSI_Oversold_Bounce",
+        "ADX_Strong_Trend",
+        "BB_Squeeze_Breakout"
+      ],
+      "price": 185.50,
+      "volume": 15000000
+    },
+    {
+      "symbol": "MSFT",
+      "rank": 2,
+      "score": 82,
+      "signals": [
+        "MACD_Bullish_Cross",
+        "RSI_Oversold_Bounce",
+        "Stochastic_Oversold",
+        "Trendline_Breakout"
+      ],
+      "price": 420.75,
+      "volume": 8500000
+    }
+  ],
+  "short_opportunities": [
+    {
+      "symbol": "TSLA",
+      "rank": 1,
+      "score": 78,
+      "signals": [
+        "MACD_Bearish_Cross",
+        "RSI_Overbought_Reversal",
+        "ADX_Strong_Trend",
+        "BB_Upper_Band_Rejection"
+      ],
+      "price": 245.30,
+      "volume": 12000000
+    }
+  ],
+  "excluded_conflicting": [
+    "NVDA"
+  ],
+  "summary": {
+    "total_scanned": 50,
+    "qualified_long": 2,
+    "qualified_short": 1,
+    "excluded_conflicting": 1,
+    "scan_duration_seconds": 45.2
+  }
+}

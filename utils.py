@@ -6,6 +6,18 @@ import urllib.error
 from datetime import datetime, timedelta
 import config
 
+# Configure standard streams to support UTF-8 on Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+if hasattr(sys.stderr, 'reconfigure'):
+    try:
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 def setup_logging():
     """Configure logging for the trading system"""
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -18,7 +30,7 @@ def setup_logging():
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
-    file_handler = logging.FileHandler(config.LOG_FILE)
+    file_handler = logging.FileHandler(config.LOG_FILE, encoding='utf-8')
     file_handler.setFormatter(logging.Formatter(log_format))
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)

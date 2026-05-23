@@ -7,6 +7,19 @@ Demonstrates:
 3. Market news filtering by watchlist
 """
 
+import sys
+# Configure standard streams to support UTF-8 on Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+if hasattr(sys.stderr, 'reconfigure'):
+    try:
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from news_sentiment import NewsSentiment
 from stock_screener import StockScreener
 from utils import get_logger
