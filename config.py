@@ -96,13 +96,15 @@ ALLOWED_US_STOCKS = _list_env("ALLOWED_US_STOCKS", [
     "XOM", "CVX", "CAT", "GE", "BA", "DE", "WMT", "HD",
     "MRVL", "ANET", "VRT", "DELL", "SMCI", "WDC", "STX", "LRCX",
     "AMAT", "KLAC", "TER", "LITE", "COHR", "CIEN", "ETN", "PWR",
-    "CEG", "EQIX", "DLR", "ADI", "TXN", "MPWR", "ON"
+    "CEG", "EQIX", "DLR", "ADI", "TXN", "MPWR", "ON",
+    "MSTR", "COIN", "ARM", "DKNG", "CELH", "SOXX", "TQQQ"
 ])
 AI_INFRA_STOCKS = _list_env("AI_INFRA_STOCKS", [
     "NVDA", "AMD", "AVGO", "MU", "MRVL", "QCOM", "ANET", "VRT",
     "DELL", "SMCI", "WDC", "STX", "LRCX", "AMAT", "KLAC", "TER",
     "LITE", "COHR", "CIEN", "ETN", "PWR", "CEG", "GOOGL", "MSFT",
-    "AMZN", "META", "ORCL", "ADI", "TXN", "MPWR", "ON", "INTC"
+    "AMZN", "META", "ORCL", "ADI", "TXN", "MPWR", "ON", "INTC",
+    "ARM", "MSTR", "COIN"
 ])
 STARTER_STOCKS = _list_env("STARTER_STOCKS", [
     "INTC", "HPE", "BAC", "WFC", "CSCO", "PFE", "KO", "T",
