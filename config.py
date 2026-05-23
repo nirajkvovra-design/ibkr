@@ -169,6 +169,17 @@ ML_SELL_THRESHOLD_PERCENT = _float_env("ML_SELL_THRESHOLD_PERCENT", -1.0)  # Exp
 ML_NEURAL_WINDOW_SIZE = _int_env("ML_NEURAL_WINDOW_SIZE", 10)  # Time window for LSTM/RNN
 ML_NEURAL_EPOCHS = _int_env("ML_NEURAL_EPOCHS", 20)  # Training epochs for dynamic neural networks
 
+# Pairs Trading Configurations
+PAIRS_WATCHLIST = [("V", "MA"), ("KO", "PEP"), ("AAPL", "MSFT")]
+PAIRS_LOOKBACK = _int_env("PAIRS_LOOKBACK", 20)  # Rolling window for calculating mean and std dev
+PAIRS_ENTRY_ZSCORE = _float_env("PAIRS_ENTRY_ZSCORE", 2.0)  # Standard deviations to trigger trade
+PAIRS_EXIT_ZSCORE = _float_env("PAIRS_EXIT_ZSCORE", 0.0)  # Standard deviations to exit (mean reversion)
+
+# Volatility Breakout Configurations
+BREAKOUT_LOOKBACK = _int_env("BREAKOUT_LOOKBACK", 20)  # Donchian channel lookback window
+BREAKOUT_ATR_MULTIPLIER = _float_env("BREAKOUT_ATR_MULTIPLIER", 1.5)  # Volatility ATR channel expander
+
+
 
 def _apply_env_overrides(overrides):
     """Set module-level settings only when the variable is not set in .env."""

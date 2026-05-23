@@ -7,7 +7,7 @@ import pytz
 import config
 from utils import get_logger, is_market_open, format_trade_log, setup_logging, send_alert, update_health_status
 from ib_connection import InteractiveBrokersConnection
-from strategies import MomentumStrategy, GridTradingStrategy, MachineLearningStrategy
+from strategies import MomentumStrategy, GridTradingStrategy, MachineLearningStrategy, PairsTradingStrategy, VolatilityBreakoutStrategy
 from risk_manager import RiskManager
 from data_fetcher import DataFetcher
 from stock_screener import StockScreener
@@ -75,6 +75,12 @@ class TradingEngine:
         if strategy_choice == "ML":
             self.strategy = MachineLearningStrategy(self.ib_connection, self.risk_manager)
             logger.info(f"Instantiated MachineLearningStrategy using {config.ML_MODEL_TYPE} model.")
+        elif strategy_choice == "PAIRS":
+            self.strategy = PairsTradingStrategy(self.ib_connection, self.risk_manager)
+            logger.info("Instantiated PairsTradingStrategy (Statistical Arbitrage).")
+        elif strategy_choice == "BREAKOUT":
+            self.strategy = VolatilityBreakoutStrategy(self.ib_connection, self.risk_manager)
+            logger.info("Instantiated VolatilityBreakoutStrategy.")
         else:
             self.strategy = MomentumStrategy(self.ib_connection, self.risk_manager)
             logger.info("Instantiated default MomentumStrategy.")

@@ -1,6 +1,7 @@
 from utils import get_logger
 import config
 from datetime import datetime
+import pandas as pd
 from pandas import isna as pd_isna
 from data_fetcher import DataFetcher
 from news_sentiment import NewsSentiment
@@ -527,4 +528,179 @@ class MachineLearningStrategy(MomentumStrategy):
                 signals[symbol] = 'HOLD'
         
         return signals
+
+
+class PairsTradingStrategy(TradingStrategy):
+    """
+    Hedge-Fund Grade Cointegrated Pairs Trading (Statistical Arbitrage) Strategy.
+    Monitors relative asset ratios and executes mean-reversion trades.
+    """
+
+    def __init__(self, ib_connection, risk_manager=None):
+        super().__init__(ib_connection, risk_manager)
+        logger.info(f"Initialized PairsTradingStrategy with pairs: {config.PAIRS_WATCHLIST}")
+
+    def check_trading_conditions(self):
+        """Standard market open check"""
+        from utils import is_market_open
+        return is_market_open() and self.check_risk_limits()
+
+    def generate_signals(self, symbols):
+        """
+        Generate paired BUY/SELL signals based on rolling Z-Scores.
+        """
+        signals = {symbol: 'HOLD' for symbol in symbols}
+        positions = self.ib_connection.get_positions()
+
+        # Step through each configured cointegrated pair
+        for sym_a, sym_b in config.PAIRS_WATCHLIST:
+            # We must have both symbols in our active watchlist to trade them
+            if sym_a not in symbols or sym_b not in symbols:
+                continue
+
+            try:
+                # Get historical prices
+                data_a = self.data_fetcher.get_stock_data(sym_a, period='3mo', interval='1d')
+                data_b = self.data_fetcher.get_stock_data(sym_b, period='3mo', interval='1d')
+
+                if data_a is None or data_b is None or len(data_a) < config.PAIRS_LOOKBACK or len(data_b) < config.PAIRS_LOOKBACK:
+                    continue
+
+                # Align datasets by index
+                aligned_df = pd.DataFrame({
+                    'close_a': data_a['Close'],
+                    'close_b': data_b['Close']
+                }).dropna()
+
+                if len(aligned_df) < config.PAIRS_LOOKBACK:
+                    continue
+
+                # Calculate price ratio (A / B)
+                ratios = aligned_df['close_a'] / aligned_df['close_b']
+                current_ratio = ratios.iloc[-1]
+
+                # Compute rolling Z-Score of the ratio
+                rolling_mean = ratios.rolling(window=config.PAIRS_LOOKBACK).mean()
+                rolling_std = ratios.rolling(window=config.PAIRS_LOOKBACK).std()
+                
+                latest_std = rolling_std.iloc[-1]
+                if latest_std == 0:
+                    latest_std = 0.0001
+                    
+                z_score = (current_ratio - rolling_mean.iloc[-1]) / latest_std
+
+                logger.info(f"Pairs Trade [{sym_a} vs {sym_b}]: PriceA=${aligned_df['close_a'].iloc[-1]:.2f} | PriceB=${aligned_df['close_b'].iloc[-1]:.2f} | Ratio={current_ratio:.4f} | Z-Score={z_score:+.2f}")
+
+                has_a = sym_a in positions
+                has_b = sym_b in positions
+
+                # Trading Decision Rules
+                if z_score >= config.PAIRS_ENTRY_ZSCORE:
+                    # Stock A is overvalued relative to Stock B
+                    # Action: SELL A (close long if we have it), BUY B (open long if we don't have it)
+                    if has_a:
+                        signals[sym_a] = 'SELL'
+                    if not has_b:
+                        signals[sym_b] = 'BUY'
+                        
+                elif z_score <= -config.PAIRS_ENTRY_ZSCORE:
+                    # Stock A is undervalued relative to Stock B
+                    # Action: BUY A (open long if we don't have it), SELL B (close long if we have it)
+                    if not has_a:
+                        signals[sym_a] = 'BUY'
+                    if has_b:
+                        signals[sym_b] = 'SELL'
+                        
+                elif abs(z_score) <= config.PAIRS_EXIT_ZSCORE:
+                    # Cointegration reverted back to mean. Close both positions to lock in gains!
+                    if has_a:
+                        signals[sym_a] = 'SELL'
+                    if has_b:
+                        signals[sym_b] = 'SELL'
+
+            except Exception as e:
+                logger.error(f"Error calculating pairs signals for {sym_a}-{sym_b}: {e}")
+
+        return signals
+
+    def execute_trades(self, signals):
+        """Leverage the MomentumStrategy's robust sequential execute pass"""
+        # Instantiate a helper momentum strategy to run the exact same execute pipeline
+        executor = MomentumStrategy(self.ib_connection, self.risk_manager)
+        executor.daily_trades = self.daily_trades
+        executor.execute_trades(signals)
+        self.daily_trades = executor.daily_trades
+
+
+class VolatilityBreakoutStrategy(MomentumStrategy):
+    """
+    Volatility Breakout Strategy (ATR + Donchian Channels).
+    Identifies high-velocity breakouts from compressed pricing bands.
+    """
+
+    def __init__(self, ib_connection, risk_manager=None):
+        super().__init__(ib_connection, risk_manager)
+        logger.info(f"Initialized VolatilityBreakoutStrategy with lookback: {config.BREAKOUT_LOOKBACK}")
+
+    def generate_signals(self, symbols):
+        """
+        Generate breakout trading signals.
+        """
+        signals = {}
+        
+        for symbol in symbols:
+            try:
+                if symbol in config.EXCLUDED_EVENT_SENSITIVE_STOCKS:
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                if not self.data_fetcher.is_trade_free_us_stock_candidate(symbol):
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                # Get historical data
+                data = self.data_fetcher.get_stock_data(symbol, period='3mo', interval='1d')
+                
+                if data is None or len(data) < config.BREAKOUT_LOOKBACK + 5:
+                    signals[symbol] = 'HOLD'
+                    continue
+                
+                # Check news sentiment safety
+                if not self.sentiment_analyzer.should_trade_based_on_news(symbol):
+                    signals[symbol] = 'HOLD'
+                    continue
+
+                close = data['Close']
+                high = data['High']
+                low = data['Low']
+                atr = data['ATR']
+                volume_ratio = data.get('Volume_Ratio', 1)
+
+                latest_close = float(close.iloc[-1])
+                latest_atr = float(atr.iloc[-1])
+
+                # Donchian channel calculation (excluding the current day to prevent look-ahead bias)
+                upper_channel = high.iloc[-(config.BREAKOUT_LOOKBACK + 1):-1].max()
+                lower_channel = low.iloc[-(config.BREAKOUT_LOOKBACK + 1):-1].min()
+
+                # Trigger Threshold: Upper channel + K * ATR
+                buy_trigger = upper_channel + (config.BREAKOUT_ATR_MULTIPLIER * latest_atr)
+
+                logger.info(f"Breakout Check [{symbol}]: Price=${latest_close:.2f} | UpperBand=${upper_channel:.2f} | BuyTrigger=${buy_trigger:.2f} | LowerBand=${lower_channel:.2f}")
+
+                # Check BUY trigger (breakout on above-average volume)
+                if latest_close >= buy_trigger and volume_ratio is not None and float(volume_ratio) >= 1.1:
+                    signals[symbol] = 'BUY'
+                # Check SELL trigger (exit when drops below lower band)
+                elif latest_close <= lower_channel:
+                    signals[symbol] = 'SELL'
+                else:
+                    signals[symbol] = 'HOLD'
+
+            except Exception as e:
+                logger.error(f"Error checking volatility breakout for {symbol}: {e}")
+                signals[symbol] = 'HOLD'
+
+        return signals
+
 
