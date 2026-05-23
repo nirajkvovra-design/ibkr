@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IBKR Algorithmic Trading Engine Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #090B10 0%, #131722 100%);
+      --card-bg: rgba(26, 32, 48, 0.65);
+      --card-border: 1px solid rgba(255, 255, 255, 0.07);
+      --card-glow-green: 0 0 20px rgba(16, 185, 129, 0.15);
+      --card-glow-violet: 0 0 20px rgba(168, 85, 247, 0.15);
+      
+      --color-primary: #A855F7; /* Violet */
+      --color-primary-hover: #C084FC;
+      --color-success: #10B981; /* Emerald */
+      --color-warning: #F59E0B; /* Amber */
+      --color-danger: #EF4444;  /* Red */
+      --color-text-main: #F8FAFC;
+      --color-text-sub: #94A3B8;
+      --color-code-bg: #0D1117;
+      
+      --font-sans: 'Outfit', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-gradient);
+      color: var(--color-text-main);
+      min-height: 100vh;
+      line-height: 1.5;
+      padding: 2rem;
+      overflow-x: hidden;
+    }
+
+    /* Glassmorphism scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* Header Styling */
+    header {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo-container {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--color-primary) 0%, #6366F1 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.5rem;
+      box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35);
+    }
+
+    .brand-title h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+    .brand-title p {
+      font-size: 0.85rem;
+      color: var(--color-text-sub);
+    }
+
+    .status-group {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .sentry-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 30px;
+      font-weight: 500;
+      font-size: 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .badge-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Core Layout Grids */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+    }
+
+    .card-healthy { box-shadow: var(--card-glow-green); }
+    .card-recovering { box-shadow: var(--card-glow-violet); }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      color: var(--color-text-main);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 0.5rem;
+    }
+
+    .card-title-icon {
+      color: var(--color-primary);
+    }
+
+    .metrics-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95rem;
+    }
+
+    .metric-label {
+      color: var(--color-text-sub);
+    }
+
+    .metric-value {
+      font-weight: 500;
+      color: var(--color-text-main);
+    }
+
+    .metric-val-mono {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    /* Blacklist items */
+    .blacklist-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .blacklist-tag {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: var(--color-danger);
+      padding: 0.25rem 0.65rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .boosted-tag {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: var(--color-success);
+      padding: 0.25rem 0.65rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    /* Main Section Layout */
+    .main-section {
+      display: grid;
+      grid-template-columns: 2.2fr 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 900px) {
+      .main-section {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Learning Matrix Table */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    th {
+      font-weight: 500;
+      color: var(--color-text-sub);
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      color: var(--color-text-main);
+    }
+
+    .tr-normal:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-badge-blacklist { background: rgba(239, 68, 68, 0.15); color: var(--color-danger); }
+    .status-badge-boosted { background: rgba(16, 185, 129, 0.15); color: var(--color-success); }
+    .status-badge-penalized { background: rgba(245, 158, 11, 0.15); color: var(--color-warning); }
+    .status-badge-normal { background: rgba(255, 255, 255, 0.08); color: var(--color-text-sub); }
+
+    /* Control Panel Cards */
+    .control-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 1rem;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      transition: all 0.2s ease;
+      border: none;
+      outline: none;
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    }
+    .btn-start:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-stop {
+      background: linear-gradient(135deg, var(--color-danger) 0%, #DC2626 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+    }
+    .btn-stop:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.35);
+    }
+
+    .btn-restart {
+      background: linear-gradient(135deg, #4B5563 0%, #1F2937 100%);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn-restart:hover:not(:disabled) {
+      background: linear-gradient(135deg, #6B7280 0%, #374151 100%);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Logs & Transaction Monitor layout */
+    .tabs-section {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 900px) {
+      .tabs-section {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .terminal-container {
+      background: var(--color-code-bg);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 1rem;
+      height: 350px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: #A5B4FC;
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .terminal-line {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .log-filter-bar {
+      margin-bottom: 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .log-input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      color: var(--color-text-main);
+      font-family: var(--font-sans);
+      outline: none;
+    }
+
+    .log-input:focus {
+      border-color: var(--color-primary);
+    }
+
+    .log-info { color: #818CF8; }
+    .log-warning { color: var(--color-warning); }
+    .log-error { color: var(--color-danger); }
+    .log-debug { color: var(--color-text-sub); }
+
+    /* Alert Banner */
+    .alert-banner {
+      display: none;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #FEE2E2;
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .alert-banner-warning {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #FEF3C7;
+    }
+
+    .banner-close-btn {
+      margin-left: auto;
+      cursor: pointer;
+      opacity: 0.7;
+    }
+    .banner-close-btn:hover { opacity: 1; }
+
+    /* Dynamic loading state overlays */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: rgba(17, 24, 39, 0.9);
+      border: var(--card-border);
+      border-left: 4px solid var(--color-primary);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      display: none;
+      z-index: 1000;
+      font-weight: 500;
+      animation: slideIn 0.3s ease forwards;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- SYSTEM ALERTS INTERCEPTOR -->
+    <div id="alertBanner" class="alert-banner">
+      <span class="badge-dot" style="background: var(--color-danger);"></span>
+      <span id="alertText">Connection lost to TWS paper trading. Auto-recovery active.</span>
+      <span class="banner-close-btn" onclick="closeAlert()">✕</span>
+    </div>
+
+    <!-- MAIN BRAND HEADER -->
+    <header>
+      <div class="brand-section">
+        <div class="logo-container">Ω</div>
+        <div class="brand-title">
+          <h1>IBKR Bot Control Console</h1>
+          <p>Automated Stock Breakout & Self-Learning System</p>
+        </div>
+      </div>
+      
+      <div class="status-group">
+        <div class="sentry-badge">
+          <span class="metric-label" style="margin-right: 0.5rem;">Sentry Mode:</span>
+          <span id="sentryStatusDot" class="badge-dot" style="background: var(--color-text-sub);"></span>
+          <span id="sentryStatusText" class="metric-value">Offline</span>
+        </div>
+        <div class="sentry-badge">
+          <span class="metric-label" style="margin-right: 0.5rem;">TWS API:</span>
+          <span id="twsStatusDot" class="badge-dot" style="background: var(--color-danger);"></span>
+          <span id="twsStatusText" class="metric-value">Disconnected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- CORE SYSTEM GRID -->
+    <div class="dashboard-grid">
+      
+      <!-- CARD 1: CONNECTIONS HEALTH -->
+      <div class="card" id="connectionCard">
+        <div class="card-title">
+          <span>Sentry Diagnostics</span>
+          <span class="card-title-icon">🩺</span>
+        </div>
+        <div class="metrics-list">
+          <div class="metric-row">
+            <span class="metric-label">Active Engine PID</span>
+            <span id="lblPid" class="metric-value metric-val-mono">--</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Auto-bind Port</span>
+            <span id="lblPort" class="metric-value metric-val-mono">7497</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Trading Mode</span>
+            <span id="lblMode" class="metric-value" style="font-weight: 700; color: var(--color-primary);">PAPER</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Sentry Restarts</span>
+            <span id="lblRestarts" class="metric-value">0</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Last Sentry Action</span>
+            <span id="lblLastAction" class="metric-value" style="font-size: 0.85rem;">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 2: SELF-LEARNING AGENT -->
+      <div class="card">
+        <div class="card-title">
+          <span>Self-Learning Intelligence</span>
+          <span class="card-title-icon">🧠</span>
+        </div>
+        <div class="metrics-list">
+          <div class="metric-row">
+            <span class="metric-label">Analyzed Tickers</span>
+            <span id="lblLearningAnalyzed" class="metric-value" style="font-size: 1.2rem; font-weight: 600;">0</span>
+          </div>
+          <div class="metric-row" style="flex-direction: column; align-items: flex-start; gap: 0.25rem;">
+            <span class="metric-label">High-Performance Boosted (1.2x)</span>
+            <div id="boostedContainer" class="blacklist-container">
+              <span style="color: var(--color-text-sub); font-size: 0.85rem; font-style: italic;">None yet</span>
+            </div>
+          </div>
+          <div class="metric-row" style="flex-direction: column; align-items: flex-start; gap: 0.25rem;">
+            <span class="metric-label">Active Blacklist (3-Day Cooling-off)</span>
+            <div id="blacklistContainer" class="blacklist-container">
+              <span style="color: var(--color-text-sub); font-size: 0.85rem; font-style: italic;">Empty blacklist</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 3: CURRENT POSITIONS -->
+      <div class="card">
+        <div class="card-title">
+          <span>Today's Sessions Open</span>
+          <span class="card-title-icon">📊</span>
+        </div>
+        <div class="metrics-list" id="positionsList" style="max-height: 140px; overflow-y: auto;">
+          <div style="text-align: center; color: var(--color-text-sub); padding: 1.5rem 0; font-style: italic; font-size: 0.9rem;">
+            No open breakout positions logged for today's session.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MAIN INTERACTIVE GRID -->
+    <div class="main-section">
+      
+      <!-- SUB SECTION A: LEARNING MATRIX -->
+      <div class="card" style="box-shadow: var(--card-glow-violet);">
+        <div class="card-title">
+          <span>Self-Learning Dynamic Asset Matrix</span>
+          <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Empirical trades review</span>
+        </div>
+        <div class="table-container">
+          <table id="learningTable">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Trades Count</th>
+                <th>Win Rate</th>
+                <th>Net Returns</th>
+                <th>Consec Losses</th>
+                <th>Risk Multiplier</th>
+                <th>System Status</th>
+              </tr>
+            </thead>
+            <tbody id="learningTableBody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--color-text-sub); font-style: italic; padding: 2rem 0;">
+                  Waiting for self-learning metrics data...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB SECTION B: SYSTEM CONTROLS -->
+      <div class="card">
+        <div class="card-title">
+          <span>Manual Control Panel</span>
+          <span class="card-title-icon">⚙️</span>
+        </div>
+        <div class="control-grid">
+          <button id="btnStart" class="btn btn-start" onclick="controlAction('start')">
+            <span>▶</span> Start Trading Bot
+          </button>
+          <button id="btnStop" class="btn btn-stop" onclick="controlAction('stop')">
+            <span>■</span> Stop Trading Bot
+          </button>
+          <button id="btnRestart" class="btn btn-restart" onclick="controlAction('restart')">
+            <span>🔀</span> Request Handoff Restart
+          </button>
+          
+          <div style="margin-top: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03);">
+            <p style="font-size: 0.8rem; color: var(--color-text-sub); margin-bottom: 0.5rem; font-weight: 500;">SENTRY WORKFLOW STATUS</p>
+            <p style="font-size: 0.85rem; line-height: 1.4;">Sentry continuously pings TWS. Clicking <strong>Start</strong> boots the engine immediately. Clicking <strong>Stop</strong> coordinates a safe, flat-position shutdown sequence.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- LOGS & TRANSACTION TABS SECTION -->
+    <div class="tabs-section">
+      
+      <!-- LOG MONITOR -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom: 0.75rem;">
+          <span>Live Sentry & Bot Logs</span>
+          <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Latest 100 rows</span>
+        </div>
+        <div class="log-filter-bar">
+          <input type="text" id="logFilter" class="log-input" placeholder="Filter logs (e.g. error, BUY, arm, rddt)..." oninput="filterLogs()">
+        </div>
+        <div id="terminal" class="terminal-container">
+          <div class="terminal-line">Connecting to log API endpoint...</div>
+        </div>
+      </div>
+
+      <!-- TRANSACTIONS JOURNAL -->
+      <div class="card">
+        <div class="card-title">
+          <span>Paper Transaction Journal</span>
+          <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Parsed from trade_history.csv</span>
+        </div>
+        <div class="table-container" style="height: 400px; overflow-y: auto;">
+          <table id="journalTable">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Side</th>
+                <th>Ticker</th>
+                <th>Size</th>
+                <th>Avg Cost</th>
+                <th>PnL</th>
+              </tr>
+            </thead>
+            <tbody id="journalTableBody">
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--color-text-sub); font-style: italic; padding: 2rem 0;">
+                  No trade records found in trade_history.csv.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast" class="toast">Action sent successfully.</div>
+
+  <script>
+    let rawLogLines = [];
+    let stateCache = {};
+
+    function showToast(message, type = "info") {
+      const toast = document.getElementById("toast");
+      toast.innerText = message;
+      toast.style.borderLeftColor = type === "error" ? "var(--color-danger)" : type === "success" ? "var(--color-success)" : "var(--color-primary)";
+      toast.style.display = "block";
+      setTimeout(() => {
+        toast.style.display = "none";
+      }, 3000);
+    }
+
+    function closeAlert() {
+      document.getElementById("alertBanner").style.display = "none";
+    }
+
+    // Call dynamic backend endpoints
+    async function fetchAPI(endpoint) {
+      try {
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        console.error(`Failed to fetch ${endpoint}:`, err);
+        return null;
+      }
+    }
+
+    // Fire control POST request
+    async function controlAction(action) {
+      showToast(`Emitting ${action} signal to system...`, "info");
+      try {
+        const res = await fetch(`/api/control/${action}`, { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message || "Signal acknowledged.", "success");
+        } else {
+          showToast(data.error || data.message || "Command rejected.", "error");
+        }
+        // Force refresh state shortly after dispatching
+        setTimeout(pollSystemState, 1000);
+      } catch (err) {
+        showToast(`Request failed: ${err.message}`, "error");
+      }
+    }
+
+    // Main polling routine
+    async function pollSystemState() {
+      const data = await fetchAPI("/api/status");
+      if (!data) {
+        // Server offline
+        updateHeaderStatus(false, false, "OFFLINE");
+        return;
+      }
+
+      stateCache = data;
+
+      // 1. Update Connection Status badges
+      const sentryOnline = data.sentry_status && data.sentry_status !== "UNKNOWN";
+      updateHeaderStatus(sentryOnline, data.connected, data.sentry_status);
+
+      // 2. Update Connection Diagnostics card
+      document.getElementById("lblPid").innerText = data.engine_pid ? data.engine_pid : "--";
+      document.getElementById("lblPort").innerText = data.port || "7497";
+      document.getElementById("lblMode").innerText = data.mode || "PAPER";
+      document.getElementById("lblRestarts").innerText = data.restart_count !== undefined ? data.restart_count : "0";
+      document.getElementById("lblLastAction").innerText = data.last_restart_time ? data.last_restart_time.split("T")[1] || data.last_restart_time : "--";
+      
+      const connCard = document.getElementById("connectionCard");
+      if (data.sentry_status === "HEALTHY") {
+        connCard.className = "card card-healthy";
+      } else if (data.sentry_status === "RECOVERING") {
+        connCard.className = "card card-recovering";
+      } else {
+        connCard.className = "card";
+      }
+
+      // 3. Update active control button enablements
+      const running = data.engine_running;
+      document.getElementById("btnStart").disabled = running;
+      document.getElementById("btnStop").disabled = !running;
+      document.getElementById("btnRestart").disabled = !running;
+
+      // 4. Update system disclaimers/alerts
+      const banner = document.getElementById("alertBanner");
+      const txt = document.getElementById("alertText");
+      if (data.sentry_status === "TWS_OFFLINE") {
+        txt.innerHTML = "<strong>Sentry Alert:</strong> TWS demo connection is OFFLINE. Please check if TWS port 7497 is listening.";
+        banner.style.display = "flex";
+        banner.className = "alert-banner";
+      } else if (data.sentry_status === "COOLDOWN_LIMIT") {
+        txt.innerHTML = "<strong>Critical Cooldown:</strong> Exceeded rate limit of 5 boots/hour. Sentry is paused to prevent restart loops.";
+        banner.style.display = "flex";
+        banner.className = "alert-banner";
+      } else if (data.connected && !running) {
+        txt.innerHTML = "<strong>TWS API Online:</strong> Sentry has connected to port. Re-binding trading engine loop shortly...";
+        banner.style.display = "flex";
+        banner.className = "alert-banner alert-banner-warning";
+      } else {
+        banner.style.display = "none";
+      }
+
+      // 5. Update Self-Learning indicators
+      const sl = data.self_learning || {};
+      document.getElementById("lblLearningAnalyzed").innerText = sl.total_analyzed || "0";
+      
+      // Blacklist tags
+      const blContainer = document.getElementById("blacklistContainer");
+      blContainer.innerHTML = "";
+      if (sl.blacklisted && sl.blacklisted.length > 0) {
+        sl.blacklisted.forEach(sym => {
+          const tag = document.createElement("span");
+          tag.className = "blacklist-tag";
+          tag.innerText = sym;
+          blContainer.appendChild(tag);
+        });
+      } else {
+        blContainer.innerHTML = '<span style="color: var(--color-text-sub); font-size: 0.85rem; font-style: italic;">Empty blacklist</span>';
+      }
+
+      // Boosted tags
+      const bContainer = document.getElementById("boostedContainer");
+      bContainer.innerHTML = "";
+      if (sl.boosted && sl.boosted.length > 0) {
+        sl.boosted.forEach(sym => {
+          const tag = document.createElement("span");
+          tag.className = "boosted-tag";
+          tag.innerText = sym;
+          bContainer.appendChild(tag);
+        });
+      } else {
+        bContainer.innerHTML = '<span style="color: var(--color-text-sub); font-size: 0.85rem; font-style: italic;">None yet</span>';
+      }
+
+      // 6. Update positions list
+      const posList = document.getElementById("positionsList");
+      posList.innerHTML = "";
+      const pos = data.positions || {};
+      const posKeys = Object.keys(pos);
+      if (posKeys.length > 0) {
+        posKeys.forEach(sym => {
+          const item = pos[sym];
+          const row = document.createElement("div");
+          row.className = "metric-row";
+          row.style.borderBottom = "1px solid rgba(255,255,255,0.03)";
+          row.style.paddingBottom = "0.25rem";
+          row.innerHTML = `
+            <span style="font-weight:600; color:var(--color-primary);">${sym}</span>
+            <span class="metric-value">${item.quantity} shares @ $${parseFloat(item.entry_price).toFixed(2)}</span>
+          `;
+          posList.appendChild(row);
+        });
+      } else {
+        posList.innerHTML = `
+          <div style="text-align: center; color: var(--color-text-sub); padding: 1.5rem 0; font-style: italic; font-size: 0.9rem;">
+            No open breakout positions logged for today's session.
+          </div>
+        `;
+      }
+
+      // 7. Update self-learning table matrix
+      updateLearningTable(sl.details);
+    }
+
+    function updateHeaderStatus(sentryOnline, twsOnline, sentryPhase) {
+      const sDot = document.getElementById("sentryStatusDot");
+      const sTxt = document.getElementById("sentryStatusText");
+      const tDot = document.getElementById("twsStatusDot");
+      const tTxt = document.getElementById("twsStatusText");
+
+      if (sentryOnline) {
+        sDot.style.background = sentryPhase === "HEALTHY" ? "var(--color-success)" : "var(--color-warning)";
+        sTxt.innerText = sentryPhase;
+      } else {
+        sDot.style.background = "var(--color-text-sub)";
+        sTxt.innerText = "Offline";
+      }
+
+      if (twsOnline) {
+        tDot.style.background = "var(--color-success)";
+        tTxt.innerText = "Connected";
+      } else {
+        tDot.style.background = "var(--color-danger)";
+        tTxt.innerText = "Disconnected";
+      }
+    }
+
+    function updateLearningTable(details) {
+      const tbody = document.getElementById("learningTableBody");
+      if (!details || Object.keys(details).length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--color-text-sub); font-style: italic; padding: 2rem 0;">
+              No self-learning history logged yet. Run trading cycles first.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = "";
+      Object.keys(details).forEach(sym => {
+        const row = details[sym];
+        const tr = document.createElement("tr");
+        tr.className = "tr-normal";
+        
+        let badgeClass = "status-badge-normal";
+        if (row.status === "BLACKLISTED") badgeClass = "status-badge-blacklist";
+        else if (row.status === "BOOSTED") badgeClass = "status-badge-boosted";
+        else if (row.status === "PENALIZED") badgeClass = "status-badge-penalized";
+
+        tr.innerHTML = `
+          <td style="font-weight:600; color:var(--color-primary);">${sym}</td>
+          <td>${row.trades}</td>
+          <td>${row.win_rate}</td>
+          <td style="font-family:var(--font-mono); font-size:0.85rem; color:${parseFloat(row.pnl.replace('$','')) >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};">${row.pnl}</td>
+          <td>${row.consecutive_losses}</td>
+          <td style="font-family:var(--font-mono); font-weight:500;">${row.multiplier}</td>
+          <td><span class="status-badge ${badgeClass}">${row.status}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Fetch and render logs
+    async function pollLogs() {
+      const data = await fetchAPI("/api/logs");
+      if (!data) return;
+
+      const term = document.getElementById("terminal");
+      const filterText = document.getElementById("logFilter").value.trim().toLowerCase();
+      
+      const rawText = data.logs || "";
+      rawLogLines = rawText.split("\n").filter(line => line.length > 0);
+      
+      renderLogsFiltered(term, filterText);
+    }
+
+    function renderLogsFiltered(container, filterText) {
+      container.innerHTML = "";
+      
+      const filtered = rawLogLines.filter(line => {
+        if (!filterText) return true;
+        return line.toLowerCase().includes(filterText);
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="terminal-line" style="color:var(--color-text-sub); font-style:italic;">No lines matching filter.</div>`;
+        return;
+      }
+
+      // Display logs with customized coloring
+      filtered.forEach(line => {
+        const row = document.createElement("div");
+        row.className = "terminal-line";
+        
+        if (line.includes("ERROR") || line.includes("FAIL")) {
+          row.className = "terminal-line log-error";
+        } else if (line.includes("WARNING") || line.includes("blacklisted")) {
+          row.className = "terminal-line log-warning";
+        } else if (line.includes("INFO") || line.includes("PASS")) {
+          row.className = "terminal-line log-info";
+        } else {
+          row.className = "terminal-line log-debug";
+        }
+        
+        row.innerText = line;
+        container.appendChild(row);
+      });
+      
+      // Auto scroll to bottom
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function filterLogs() {
+      const term = document.getElementById("terminal");
+      const filterText = document.getElementById("logFilter").value.trim().toLowerCase();
+      renderLogsFiltered(term, filterText);
+    }
+
+    // Fetch and render trade history
+    async function pollHistory() {
+      const data = await fetchAPI("/api/history");
+      if (!data || !data.history) return;
+
+      const tbody = document.getElementById("journalTableBody");
+      const h = data.history;
+
+      if (h.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--color-text-sub); font-style: italic; padding: 2rem 0;">
+              No executions parsed from trade_history.csv.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = "";
+      h.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.className = "tr-normal";
+        
+        const timestamp = row.timestamp ? row.timestamp.substring(5, 16).replace("T", " ") : "--";
+        const side = row.side || row.action || "BUY";
+        const pnlVal = parseFloat(row.pnl || 0.0);
+        const pnlText = row.pnl ? `${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)}` : "--";
+        
+        tr.innerHTML = `
+          <td style="font-size:0.8rem; color:var(--color-text-sub);">${timestamp}</td>
+          <td style="font-weight:600; color:${side.toUpperCase() === 'BUY' ? 'var(--color-success)' : '#6366F1'};">${side.toUpperCase()}</td>
+          <td style="font-weight:600;">${row.symbol || "--"}</td>
+          <td style="font-family:var(--font-mono);">${row.quantity || "--"}</td>
+          <td style="font-family:var(--font-mono); font-size:0.85rem;">$${parseFloat(row.price || 0.0).toFixed(2)}</td>
+          <td style="font-family:var(--font-mono); font-size:0.85rem; font-weight:500; color:${pnlVal > 0 ? 'var(--color-success)' : pnlVal < 0 ? 'var(--color-danger)' : 'var(--color-text-sub)'};">${pnlText}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Kick off loops
+    pollSystemState();
+    pollLogs();
+    pollHistory();
+    
+    // Poll every 3 seconds for state and logs
+    setInterval(pollSystemState, 3000);
+    setInterval(pollLogs, 3000);
+    setInterval(pollHistory, 5000); // Poll trade history less frequently
+  </script>
+</body>
+</html>
