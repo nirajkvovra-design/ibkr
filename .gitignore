@@ -1,0 +1,51 @@
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+trading_logs.txt
+scheduler_log.txt
+paper_trading_journal.jsonl
+.trading_engine.pid
+.trading_engine.restart
+trading_research.jsonl
+daily_positions.json
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Data files
+data/
+*.csv
+*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+~$*
