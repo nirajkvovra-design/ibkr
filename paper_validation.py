@@ -30,6 +30,28 @@ from utils import get_logger, is_market_open, setup_logging
 logger = get_logger(__name__)
 
 
+def validate_paper_validation_config():
+    """Validate paper validation startup settings before running a test cycle."""
+    is_valid = True
+
+    if config.PAPER_TRADING and config.IB_PORT != 7497:
+        print(f"FAIL: PAPER_TRADING=True but IB_PORT={config.IB_PORT}. Use port 7497 for TWS paper trading.")
+        is_valid = False
+    if not config.PAPER_TRADING and config.IB_PORT == 7497:
+        print("FAIL: PAPER_TRADING=False but IB_PORT=7497. Use port 7496 for live trading or enable PAPER_TRADING=True.")
+        is_valid = False
+    if not config.PAPER_TRADING and not config.ENABLE_LIVE_TRADING:
+        print("FAIL: LIVE trading mode requires ENABLE_LIVE_TRADING=True. Do not enable live execution until paper validation passes.")
+        is_valid = False
+
+    if is_valid:
+        print("Paper validation startup configuration OK.")
+    else:
+        print("Paper validation startup configuration failed. Fix the issues above before continuing.")
+
+    return is_valid
+
+
 def test_one_cycle():
     """Connect to paper IB and run one trading-loop pass."""
     from ib_connection import InteractiveBrokersConnection
@@ -39,6 +61,8 @@ def test_one_cycle():
     from trading_engine import TradingEngine
 
     setup_logging()
+    if not validate_paper_validation_config():
+        return False
     record_session_start()
 
     if not config.PAPER_TRADING:

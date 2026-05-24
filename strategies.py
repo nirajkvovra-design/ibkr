@@ -231,6 +231,22 @@ class MomentumStrategy(TradingStrategy):
         if is_shutting_down():
             signals = {symbol: action for symbol, action in signals.items() if action == "SELL"}
 
+        # Get market regime and scale sizes/risk levels dynamically
+        regime = self.data_fetcher.get_market_regime()
+        size_multiplier = 1.0
+        sl_percent = config.STOP_LOSS_PERCENT
+        tp_percent = config.TAKE_PROFIT_PERCENT
+
+        if regime == 'NEUTRAL':
+            size_multiplier = config.REGIME_NEUTRAL_SIZE_MULTIPLIER
+            sl_percent = config.STOP_LOSS_PERCENT * config.REGIME_NEUTRAL_SL_TP_MULTIPLIER
+            tp_percent = config.TAKE_PROFIT_PERCENT * config.REGIME_NEUTRAL_SL_TP_MULTIPLIER
+            logger.info(f"[Market Regime Executor] NEUTRAL market: Scaling position size by {size_multiplier}x, SL to {sl_percent:.2f}%, TP to {tp_percent:.2f}%")
+        elif regime == 'BEARISH':
+            size_multiplier = config.REGIME_BEARISH_SIZE_MULTIPLIER
+            sl_percent = config.STOP_LOSS_PERCENT * config.REGIME_BEARISH_SL_MULTIPLIER
+            logger.info(f"[Market Regime Executor] BEARISH market: Scaling position size by {size_multiplier}x, SL to {sl_percent:.2f}% (capital preservation active)")
+
         # Separate into SELL and BUY signals
         sell_signals = {sym: sig for sym, sig in signals.items() if sig == 'SELL'}
         buy_signals = {sym: sig for sym, sig in signals.items() if sig == 'BUY'}
@@ -314,7 +330,7 @@ class MomentumStrategy(TradingStrategy):
                 position_size = min(
                     max_pos_cap,
                     buying_funds * config.POSITION_SIZE_PERCENT
-                )
+                ) * size_multiplier
                 
                 if position_size > 0:
                     # Get current price
@@ -349,8 +365,8 @@ class MomentumStrategy(TradingStrategy):
                             }
                             if self.risk_manager:
                                 self.risk_manager.add_position(symbol, quantity, current_price)
-                                self.risk_manager.set_stop_loss(symbol, current_price, config.STOP_LOSS_PERCENT)
-                                self.risk_manager.set_take_profit(symbol, current_price, config.TAKE_PROFIT_PERCENT)
+                                self.risk_manager.set_stop_loss(symbol, current_price, sl_percent)
+                                self.risk_manager.set_take_profit(symbol, current_price, tp_percent)
                             try:
                                 from daily_positions import record_open
                                 record_open(symbol, quantity, current_price, order_id)

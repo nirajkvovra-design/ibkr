@@ -90,6 +90,8 @@ def verify_configuration():
             ("Fee-to-profit guard configured", hasattr(config, "MAX_FEE_TO_PROFIT_RATIO")),
             ("Live trading safety gate configured", hasattr(config, "ENABLE_LIVE_TRADING")),
             ("Live order placement explicitly armed", config.PAPER_TRADING or config.ENABLE_LIVE_TRADING),
+            ("Paper mode uses standard demo port", not config.PAPER_TRADING or config.IB_PORT == 7497),
+            ("Live mode uses standard live port", config.PAPER_TRADING or config.IB_PORT == 7496),
         ]
 
         all_passed = True

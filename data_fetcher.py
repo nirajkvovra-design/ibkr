@@ -22,6 +22,8 @@ class DataFetcher:
         self.calendar_cache = {}
         self.calendar_cache_time = {}
         self.cache_duration = 300  # Cache for 5 minutes
+        self.regime_cache = None
+        self.regime_cache_time = None
         
     def is_cache_valid(self, symbol):
         """Check if cached data is still fresh"""
@@ -164,41 +166,114 @@ class DataFetcher:
             multiplier = 1 - (config.MAX_EXIT_SLIPPAGE_PERCENT / 100)
         return round(current_price * multiplier, 2)
 
+    def get_market_regime(self):
+        """
+        Classifies the daily broad market direction into BULLISH, NEUTRAL, or BEARISH.
+        Uses cached regime state if updated within the last 30 minutes.
+        """
+        if self.regime_cache is not None and self.regime_cache_time is not None:
+            age = datetime.now() - self.regime_cache_time
+            if age.total_seconds() < 1800:  # 30 minutes
+                return self.regime_cache
+
+        logger.info("[Market Regime Sentry] Evaluating broad market direction...")
+        bullish_indicators = 0
+        total_indicators = 0
+        bearish_indicators = 0
+
+        for symbol in config.MARKET_REGIME_SYMBOLS:
+            try:
+                data = self.get_stock_data(symbol, period='6mo', interval='1d')
+                if data is None or len(data) < 50:
+                    continue
+
+                latest = data.iloc[-1]
+                close = float(latest['Close'])
+                prev_close = float(data.iloc[-2]['Close'])
+                sma_20 = latest.get('SMA_20')
+                sma_50 = latest.get('SMA_50')
+                sma_200 = latest.get('SMA_200')
+                macd = latest.get('MACD')
+                macd_signal = latest.get('MACD_Signal')
+
+                five_day_close = float(data.iloc[-6]['Close']) if len(data) >= 6 else prev_close
+                five_day_return = (close - five_day_close) / five_day_close
+
+                # 1. Short-term trend (Price vs SMA_20)
+                if sma_20 is not None and not pd.isna(sma_20):
+                    total_indicators += 1
+                    if close > float(sma_20):
+                        bullish_indicators += 1
+                    else:
+                        bearish_indicators += 1
+
+                # 2. Medium-term trend (Price vs SMA_50)
+                if sma_50 is not None and not pd.isna(sma_50):
+                    total_indicators += 1
+                    if close > float(sma_50):
+                        bullish_indicators += 1
+                    else:
+                        bearish_indicators += 1
+
+                # 3. Long-term trend (Price vs SMA_200)
+                if sma_200 is not None and not pd.isna(sma_200):
+                    total_indicators += 2
+                    if close > float(sma_200):
+                        bullish_indicators += 2
+                    else:
+                        bearish_indicators += 2
+
+                # 4. MACD trend
+                if macd is not None and macd_signal is not None and not pd.isna(macd) and not pd.isna(macd_signal):
+                    total_indicators += 1
+                    if macd >= macd_signal:
+                        bullish_indicators += 1
+                    else:
+                        bearish_indicators += 1
+
+                # 5. Short-term momentum
+                total_indicators += 1
+                if five_day_return >= 0.005:
+                    bullish_indicators += 1
+                elif five_day_return <= -0.01:
+                    bearish_indicators += 1
+
+            except Exception as e:
+                logger.error(f"Error evaluating regime for {symbol}: {e}")
+
+        if total_indicators == 0:
+            logger.warning("No index data available; assuming BULLISH regime fallback")
+            self.regime_cache = 'BULLISH'
+            self.regime_cache_time = datetime.now()
+            return 'BULLISH'
+
+        bullish_ratio = bullish_indicators / total_indicators
+        bearish_ratio = bearish_indicators / total_indicators
+
+        logger.info(f"[Market Regime Sentry] Score: Bullish={bullish_ratio:.2f}, Bearish={bearish_ratio:.2f} (Total indicators evaluated: {total_indicators})")
+
+        if bullish_ratio >= 0.60:
+            regime = 'BULLISH'
+        elif bearish_ratio >= 0.60:
+            regime = 'BEARISH'
+        else:
+            regime = 'NEUTRAL'
+
+        logger.info(f"[Market Regime Sentry] Classified daily broad market direction as: {regime}")
+        self.regime_cache = regime
+        self.regime_cache_time = datetime.now()
+        return regime
+
     def market_regime_allows_long_trades(self):
         """Require broad-market confirmation before opening long positions."""
         if not config.REQUIRE_MARKET_REGIME_CONFIRMATION:
             return True
 
-        confirmations = 0
-        checked = 0
-        for symbol in config.MARKET_REGIME_SYMBOLS:
-            data = self.get_stock_data(symbol, period='3mo', interval='1d')
-            if data is None or len(data) < 20:
-                continue
-
-            latest = data.iloc[-1]
-            close = float(latest['Close'])
-            previous_close = float(data.iloc[-2]['Close'])
-            sma_20 = latest.get('SMA_20')
-            macd = latest.get('MACD')
-            macd_signal = latest.get('MACD_Signal')
-            if sma_20 is None or pd.isna(sma_20):
-                continue
-
-            checked += 1
-            one_day_change = (close - previous_close) / previous_close
-            above_trend = close > float(sma_20)
-            macd_ok = macd is not None and macd_signal is not None and not pd.isna(macd) and not pd.isna(macd_signal) and macd >= macd_signal
-            if above_trend and one_day_change >= -0.005 and macd_ok:
-                confirmations += 1
-
-        if checked == 0:
-            logger.warning("Market regime unavailable; blocking new long trades")
+        regime = self.get_market_regime()
+        if regime == 'BEARISH':
+            logger.warning("[Market Regime Sentry] Long trades are restricted during a BEARISH market regime.")
             return False
-        allowed = confirmations >= max(1, checked // 2 + checked % 2)
-        if not allowed:
-            logger.warning(f"Market regime blocks new long trades: {confirmations}/{checked} confirmations")
-        return allowed
+        return True
     
     def get_fundamental_data(self, symbol):
         """Fetch fundamental data (P/E, market cap, etc.)"""

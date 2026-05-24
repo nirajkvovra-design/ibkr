@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import config
 import engine_control
 from utils import get_logger, setup_logging
+import option_analyzer
 
 logger = get_logger("dashboard_server")
 
@@ -175,6 +176,42 @@ class DashboardHTTPHandler(BaseHTTPRequestHandler):
                 "REQUIRE_BULLISH_NEWS_FOR_BUY": (env.get("REQUIRE_BULLISH_NEWS_FOR_BUY") or str(getattr(config, "REQUIRE_BULLISH_NEWS_FOR_BUY", True))).strip().lower() in ("1", "true", "yes"),
             }
             self.send_json_response(config_data)
+            return
+
+        # Fetch available option expirations for a symbol
+        elif path == "/api/options/expirations":
+            query_params = urllib.parse.parse_qs(parsed_url.query)
+            symbol = query_params.get("symbol", ["AAPL"])[0].upper()
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                expirations = ticker.options
+                self.send_json_response({"symbol": symbol, "expirations": expirations or []})
+            except Exception as e:
+                logger.error(f"Error serving expirations for {symbol}: {e}")
+                self.send_error_response(500, f"Error fetching expirations: {e}")
+            return
+
+        # Fetch option pain / OI analysis
+        elif path == "/api/options/pain":
+            query_params = urllib.parse.parse_qs(parsed_url.query)
+            symbol = query_params.get("symbol", ["AAPL"])[0].upper()
+            expiration = query_params.get("expiration", [None])[0]
+            if expiration in ("null", "undefined", "", "None"):
+                expiration = None
+            try:
+                data = option_analyzer.fetch_option_data(symbol, expiration)
+                if not data:
+                    self.send_error_response(404, f"No option data found for {symbol}")
+                    return
+                results = option_analyzer.analyze_options(data)
+                if not results:
+                    self.send_error_response(400, f"Option analysis failed for {symbol}")
+                    return
+                self.send_json_response(results)
+            except Exception as e:
+                logger.error(f"Error serving option pain analysis for {symbol}: {e}")
+                self.send_error_response(500, f"Error processing option analysis: {e}")
             return
 
         else:

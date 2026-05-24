@@ -541,6 +541,11 @@
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -909,6 +914,91 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- NEW OPTIONS OPEN INTEREST & MAX PAIN ANALYSIS WIDGET -->
+    <div class="card" style="box-shadow: var(--card-glow-violet); margin-top: 2rem;">
+      <div class="card-title">
+        <span>Options Open Interest & Max Pain Pinning Diagnostics</span>
+        <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Max Pain option walls and strike distribution</span>
+      </div>
+      
+      <!-- Input Controls Row -->
+      <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 0.25rem;">
+          <label class="metric-label" style="font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em;">SYMBOL</label>
+          <input type="text" id="optSymbol" class="log-input" value="AAPL" placeholder="e.g. PLTR, AAPL" style="padding: 0.4rem 0.75rem;" onchange="loadOptionExpirations()">
+        </div>
+        <div style="flex: 2; min-width: 200px; display: flex; flex-direction: column; gap: 0.25rem;">
+          <label class="metric-label" style="font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em;">EXPIRATION DATE</label>
+          <select id="optExpiration" class="log-input" style="padding: 0.4rem 0.75rem;" onchange="calculateOptionsPain()">
+            <option value="">Select a symbol first</option>
+          </select>
+        </div>
+        <button id="btnFetchOptions" class="btn btn-restart" style="width: auto; padding: 0.4rem 1.25rem; border-radius: 8px; font-size: 0.9rem;" onclick="calculateOptionsPain()">
+          🔍 Run Analysis
+        </button>
+      </div>
+
+      <!-- Option Pain Stats Panel -->
+      <div id="optPainDetails" style="display: none; margin-bottom: 1.5rem;">
+        <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 1.5rem;">
+          <div class="card" style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 10px;">
+            <div class="metric-label" style="font-size: 0.8rem; text-transform: uppercase;">Max Pain Strike</div>
+            <div id="optMaxPainVal" style="font-size: 1.8rem; font-weight: 700; color: var(--color-primary); line-height: 1.2; margin-top: 0.25rem;">--</div>
+            <div id="optDeviationVal" style="font-size: 0.8rem; color: var(--color-text-sub); margin-top: 0.25rem;">--</div>
+          </div>
+          <div class="card" style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 10px;">
+            <div class="metric-label" style="font-size: 0.8rem; text-transform: uppercase;">Put/Call Ratio (OI)</div>
+            <div id="optPCRVal" style="font-size: 1.8rem; font-weight: 700; color: #818CF8; line-height: 1.2; margin-top: 0.25rem;">--</div>
+            <div id="optPCRSentiment" style="font-size: 0.8rem; font-weight: 600; color: var(--color-success); margin-top: 0.25rem;">BULLISH</div>
+          </div>
+          <div class="card" style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 10px;">
+            <div class="metric-label" style="font-size: 0.8rem; text-transform: uppercase;">Resistance Call Wall</div>
+            <div id="optCallWall" style="font-size: 1.8rem; font-weight: 700; color: var(--color-danger); line-height: 1.2; margin-top: 0.25rem;">--</div>
+            <div id="optCallWallOI" style="font-size: 0.8rem; color: var(--color-text-sub); margin-top: 0.25rem;">--</div>
+          </div>
+          <div class="card" style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 10px;">
+            <div class="metric-label" style="font-size: 0.8rem; text-transform: uppercase;">Support Put Wall</div>
+            <div id="optPutWall" style="font-size: 1.8rem; font-weight: 700; color: var(--color-success); line-height: 1.2; margin-top: 0.25rem;">--</div>
+            <div id="optPutWallOI" style="font-size: 0.8rem; color: var(--color-text-sub); margin-top: 0.25rem;">--</div>
+          </div>
+        </div>
+
+        <!-- Custom SVG Bar Chart -->
+        <div style="background: rgba(10, 15, 28, 0.45); border-radius: 12px; border: var(--card-border); padding: 1.25rem; position: relative;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <span style="font-size: 0.9rem; font-weight: 600; color: var(--color-text-main);">Strike Distribution (Calls vs Puts Open Interest)</span>
+            <div style="display: flex; gap: 1rem; font-size: 0.8rem;">
+              <span style="display: flex; align-items: center; gap: 0.25rem;">
+                <span style="width: 10px; height: 10px; background: var(--color-primary); display: inline-block; border-radius: 2px;"></span> Calls Open Interest
+              </span>
+              <span style="display: flex; align-items: center; gap: 0.25rem;">
+                <span style="width: 10px; height: 10px; background: var(--color-success); display: inline-block; border-radius: 2px;"></span> Puts Open Interest
+              </span>
+            </div>
+          </div>
+          
+          <!-- Chart area -->
+          <div id="optChartTooltip" class="chart-tooltip" style="display: none; background: rgba(10,15,28,0.95); border: 1px solid var(--color-primary); padding: 0.5rem 0.75rem; border-radius: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.6);"></div>
+          <div id="optChartContainer" style="height: 250px; position: relative;">
+            <svg id="optOiChart" style="width: 100%; height: 100%; overflow: visible;">
+              <!-- Dynamic elements drawn in JS -->
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div id="optPainLoading" style="display: none; text-align: center; padding: 3rem 0;">
+        <div style="font-size: 1.2rem; font-style: italic; color: var(--color-text-sub); display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+          <span style="display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+          Querying option chains and performing pain analysis...
+        </div>
+      </div>
+
+      <div id="optPainEmpty" style="text-align: center; padding: 3rem 0; color: var(--color-text-sub); font-style: italic;">
+        Enter a stock symbol above and select an expiration date to load options pinning diagnostics.
       </div>
     </div>
 
@@ -1451,6 +1541,299 @@
         tbody.appendChild(tr);
       });
     }
+
+    // Load available option expirations for Symbol
+    async function loadOptionExpirations() {
+      const sym = document.getElementById("optSymbol").value.trim().toUpperCase();
+      if (!sym) return;
+      
+      const select = document.getElementById("optExpiration");
+      select.innerHTML = '<option value="">Loading expirations...</option>';
+      
+      const data = await fetchAPI(`/api/options/expirations?symbol=${sym}`);
+      if (!data || !data.expirations || data.expirations.length === 0) {
+        select.innerHTML = '<option value="">No expirations found</option>';
+        document.getElementById("optPainEmpty").style.display = "block";
+        document.getElementById("optPainEmpty").innerText = `No option contracts found for ticker '${sym}'.`;
+        document.getElementById("optPainDetails").style.display = "none";
+        return;
+      }
+      
+      select.innerHTML = "";
+      data.expirations.forEach((exp, idx) => {
+        const opt = document.createElement("option");
+        opt.value = exp;
+        opt.innerText = exp + (idx === 0 ? " (Nearest)" : "");
+        select.appendChild(opt);
+      });
+      
+      calculateOptionsPain();
+    }
+
+    // Perform Max Pain Calculation and Render
+    async function calculateOptionsPain() {
+      const sym = document.getElementById("optSymbol").value.trim().toUpperCase();
+      const exp = document.getElementById("optExpiration").value;
+      if (!sym || !exp) return;
+      
+      document.getElementById("optPainLoading").style.display = "block";
+      document.getElementById("optPainDetails").style.display = "none";
+      document.getElementById("optPainEmpty").style.display = "none";
+      
+      const results = await fetchAPI(`/api/options/pain?symbol=${sym}&expiration=${exp}`);
+      document.getElementById("optPainLoading").style.display = "none";
+      
+      if (!results || results.error || !results.strikes || results.strikes.length === 0) {
+        document.getElementById("optPainEmpty").style.display = "block";
+        document.getElementById("optPainEmpty").innerText = `Failed to retrieve options data for ${sym} on ${exp}.`;
+        return;
+      }
+      
+      // Update executive metrics
+      const cp = results.current_price;
+      const mp = results.max_pain_strike;
+      
+      document.getElementById("optMaxPainVal").innerText = mp ? `$${mp.toFixed(2)}` : "--";
+      
+      const devEl = document.getElementById("optDeviationVal");
+      if (cp && mp) {
+        const diffVal = cp - mp;
+        const diffPct = (diffVal / mp) * 100;
+        const direction = diffVal > 0 ? "above" : "below";
+        devEl.innerHTML = `Price: <strong>$${cp.toFixed(2)}</strong> (${Math.abs(diffPct).toFixed(1)}% ${direction})`;
+      } else {
+        devEl.innerText = cp ? `Price: $${cp.toFixed(2)}` : "--";
+      }
+      
+      document.getElementById("optPCRVal").innerText = results.pcr_oi !== undefined ? results.pcr_oi.toFixed(2) : "--";
+      
+      const sentEl = document.getElementById("optPCRSentiment");
+      const pcr = results.pcr_oi;
+      if (pcr < 0.7) {
+        sentEl.innerText = "BULLISH (Heavy Calls)";
+        sentEl.style.color = "var(--color-success)";
+      } else if (pcr > 1.0) {
+        sentEl.innerText = "BEARISH (Heavy Puts)";
+        sentEl.style.color = "var(--color-danger)";
+      } else {
+        sentEl.innerText = "NEUTRAL";
+        sentEl.style.color = "var(--color-warning)";
+      }
+      
+      document.getElementById("optCallWall").innerText = results.call_wall ? `$${results.call_wall.toFixed(2)}` : "--";
+      document.getElementById("optCallWallOI").innerText = `OI: ${results.call_wall_oi ? results.call_wall_oi.toLocaleString() : "--"}`;
+      
+      document.getElementById("optPutWall").innerText = results.put_wall ? `$${results.put_wall.toFixed(2)}` : "--";
+      document.getElementById("optPutWallOI").innerText = `OI: ${results.put_wall_oi ? results.put_wall_oi.toLocaleString() : "--"}`;
+      
+      // Draw standard SVG bar chart
+      drawOptionsOiChart(results);
+      document.getElementById("optPainDetails").style.display = "block";
+    }
+
+    // Render interactive SVG bar chart for calls and puts
+    function drawOptionsOiChart(results) {
+      const svg = document.getElementById("optOiChart");
+      svg.innerHTML = "";
+      
+      const strikes = results.strikes;
+      if (!strikes || strikes.length === 0) return;
+
+      const width = svg.clientWidth || 600;
+      const height = 250;
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      
+      const paddingLeft = 45;
+      const paddingRight = 45;
+      const paddingTop = 25;
+      const paddingBottom = 35;
+      
+      const chartWidth = width - paddingLeft - paddingRight;
+      const chartHeight = height - paddingTop - paddingBottom;
+      
+      const minStrike = strikes[0].strike;
+      const maxStrike = strikes[strikes.length - 1].strike;
+      const strikeRange = (maxStrike - minStrike) || 1.0;
+      
+      const maxOi = Math.max(...strikes.map(s => Math.max(s.call_oi, s.put_oi))) || 1;
+      
+      // Coordinate conversions
+      const getX = (strikeVal) => {
+        const pct = (strikeVal - minStrike) / strikeRange;
+        return paddingLeft + pct * chartWidth;
+      };
+      
+      const getY = (oiVal) => {
+        return height - paddingBottom - (oiVal / maxOi) * chartHeight;
+      };
+      
+      // Draw grid lines (horizontal)
+      const gridCount = 4;
+      for (let i = 0; i <= gridCount; i++) {
+        const oiVal = (i / gridCount) * maxOi;
+        const y = getY(oiVal);
+        
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", paddingLeft);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", width - paddingRight);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "rgba(255, 255, 255, 0.05)");
+        line.setAttribute("stroke-dasharray", "4,4");
+        svg.appendChild(line);
+        
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", paddingLeft - 5);
+        text.setAttribute("y", y + 3);
+        text.setAttribute("text-anchor", "end");
+        text.setAttribute("fill", "var(--color-text-sub)");
+        text.setAttribute("font-size", "8px");
+        text.setAttribute("font-family", "var(--font-mono)");
+        text.textContent = oiVal >= 1000 ? (oiVal / 1000).toFixed(0) + "k" : oiVal.toFixed(0);
+        svg.appendChild(text);
+      }
+      
+      // Draw Bars
+      const barWidth = Math.max(3, (chartWidth / strikes.length) * 0.35);
+      const tooltip = document.getElementById("optChartTooltip");
+      
+      strikes.forEach((s) => {
+        const xCenter = getX(s.strike);
+        
+        // 1. Call Bar (Left of center)
+        const callHeight = (s.call_oi / maxOi) * chartHeight;
+        const callY = height - paddingBottom - callHeight;
+        const callRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        callRect.setAttribute("x", xCenter - barWidth - 1);
+        callRect.setAttribute("y", callY);
+        callRect.setAttribute("width", barWidth);
+        callRect.setAttribute("height", Math.max(1, callHeight));
+        callRect.setAttribute("fill", "var(--color-primary)");
+        callRect.setAttribute("rx", "1");
+        callRect.setAttribute("opacity", "0.85");
+        callRect.style.cursor = "pointer";
+        callRect.style.transition = "opacity 0.2s";
+        
+        callRect.addEventListener("mouseenter", (e) => {
+          callRect.setAttribute("opacity", "1.0");
+          tooltip.style.display = "block";
+          tooltip.innerHTML = `<strong>Strike $${s.strike.toFixed(2)} (Call)</strong><br>
+                               Open Interest: <span style='color:var(--color-primary); font-weight:700;'>${s.call_oi.toLocaleString()}</span><br>
+                               Volume: <span>${s.call_vol.toLocaleString()}</span>`;
+          
+          const rect = svg.getBoundingClientRect();
+          tooltip.style.left = `${(xCenter / width) * rect.width - 60}px`;
+          tooltip.style.top = `${((callY - 10) / height) * rect.height - 60}px`;
+        });
+        callRect.addEventListener("mouseleave", () => {
+          callRect.setAttribute("opacity", "0.85");
+          tooltip.style.display = "none";
+        });
+        svg.appendChild(callRect);
+        
+        // 2. Put Bar (Right of center)
+        const putHeight = (s.put_oi / maxOi) * chartHeight;
+        const putY = height - paddingBottom - putHeight;
+        const putRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        putRect.setAttribute("x", xCenter + 1);
+        putRect.setAttribute("y", putY);
+        putRect.setAttribute("width", barWidth);
+        putRect.setAttribute("height", Math.max(1, putHeight));
+        putRect.setAttribute("fill", "var(--color-success)");
+        putRect.setAttribute("rx", "1");
+        putRect.setAttribute("opacity", "0.85");
+        putRect.style.cursor = "pointer";
+        putRect.style.transition = "opacity 0.2s";
+        
+        putRect.addEventListener("mouseenter", (e) => {
+          putRect.setAttribute("opacity", "1.0");
+          tooltip.style.display = "block";
+          tooltip.innerHTML = `<strong>Strike $${s.strike.toFixed(2)} (Put)</strong><br>
+                               Open Interest: <span style='color:var(--color-success); font-weight:700;'>${s.put_oi.toLocaleString()}</span><br>
+                               Volume: <span>${s.put_vol.toLocaleString()}</span>`;
+          
+          const rect = svg.getBoundingClientRect();
+          tooltip.style.left = `${(xCenter / width) * rect.width - 60}px`;
+          tooltip.style.top = `${((putY - 10) / height) * rect.height - 60}px`;
+        });
+        putRect.addEventListener("mouseleave", () => {
+          putRect.setAttribute("opacity", "0.85");
+          tooltip.style.display = "none";
+        });
+        svg.appendChild(putRect);
+        
+        // Strike label (X axis label)
+        const labelInterval = Math.max(1, Math.round(strikes.length / 10));
+        const idx = strikes.indexOf(s);
+        if (idx % labelInterval === 0) {
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.setAttribute("x", xCenter);
+          text.setAttribute("y", height - paddingBottom + 15);
+          text.setAttribute("text-anchor", "middle");
+          text.setAttribute("fill", "var(--color-text-sub)");
+          text.setAttribute("font-size", "9px");
+          text.setAttribute("font-family", "var(--font-sans)");
+          text.textContent = "$" + s.strike.toFixed(1);
+          svg.appendChild(text);
+        }
+      });
+      
+      // Draw Max Pain Line (Dashed Purple Line)
+      if (results.max_pain_strike) {
+        const mpX = getX(results.max_pain_strike);
+        if (mpX >= paddingLeft && mpX <= width - paddingRight) {
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1", mpX);
+          line.setAttribute("y1", paddingTop - 5);
+          line.setAttribute("x2", mpX);
+          line.setAttribute("y2", height - paddingBottom);
+          line.setAttribute("stroke", "var(--color-primary)");
+          line.setAttribute("stroke-width", "2");
+          line.setAttribute("stroke-dasharray", "5,3");
+          svg.appendChild(line);
+          
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.setAttribute("x", mpX);
+          label.setAttribute("y", paddingTop - 8);
+          label.setAttribute("text-anchor", "middle");
+          label.setAttribute("fill", "var(--color-primary)");
+          label.setAttribute("font-size", "9px");
+          label.setAttribute("font-weight", "600");
+          label.textContent = `Max Pain: $${results.max_pain_strike.toFixed(2)}`;
+          svg.appendChild(label);
+        }
+      }
+      
+      // Draw Current Price Line (Solid White Line)
+      if (results.current_price) {
+        if (results.current_price >= minStrike && results.current_price <= maxStrike) {
+          const cpX = getX(results.current_price);
+          if (cpX >= paddingLeft && cpX <= width - paddingRight) {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", cpX);
+            line.setAttribute("y1", paddingTop - 5);
+            line.setAttribute("x2", cpX);
+            line.setAttribute("y2", height - paddingBottom);
+            line.setAttribute("stroke", "#FFFFFF");
+            line.setAttribute("stroke-width", "1.5");
+            svg.appendChild(line);
+            
+            const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            label.setAttribute("x", cpX);
+            label.setAttribute("y", height - paddingBottom + 28);
+            label.setAttribute("text-anchor", "middle");
+            label.setAttribute("fill", "#FFFFFF");
+            label.setAttribute("font-size", "9px");
+            label.setAttribute("font-weight", "600");
+            label.textContent = `Price: $${results.current_price.toFixed(2)}`;
+            svg.appendChild(label);
+          }
+        }
+      }
+    }
+
+    // Load options at startup
+    setTimeout(loadOptionExpirations, 1200);
 
     // Kick off loops
     startMarketClock();

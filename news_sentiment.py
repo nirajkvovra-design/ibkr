@@ -53,7 +53,9 @@ class NewsSentiment:
             'export control': 1.2, 'restriction': 0.9, 'ban': 1.0, 'sanction': 1.1, 'capex cut': 1.0,
             'spending cut': 0.9, 'order cut': 1.0, 'cancel': 0.8, 'shortage': 0.7, 'margin pressure': 0.8,
             'accounting': 1.0, 'probe': 1.0, 'disappointing': 0.9, 'negative': 0.7, 'concern': 0.7,
-            'competition': 0.6, 'challenged': 0.7, 'pressure': 0.6, 'headwind': 0.7
+            'competition': 0.6, 'challenged': 0.7, 'pressure': 0.6, 'headwind': 0.7,
+            'dilution': 1.1, 'share dilution': 1.1, 'stock dilution': 1.1, 'secondary offering': 1.1,
+            'share offering': 1.0, 'public offering': 0.9
         }
         
         # Earnings-related keywords
@@ -68,7 +70,8 @@ class NewsSentiment:
         self.high_impact_keywords = [
             'earnings', 'bankruptcy', 'acquisition', 'merger', 'ipo', 'recall',
             'lawsuit', 'ceo departure', 'management change', 'product launch',
-            'regulatory approval', 'fda approval', 'layoff', 'dividend cut'
+            'regulatory approval', 'fda approval', 'layoff', 'dividend cut',
+            'secondary offering', 'share dilution'
         ]
 
     
@@ -580,7 +583,10 @@ class NewsSentiment:
                 'bankruptcy', 'delisting', 'fraud', 'recall',
                 'lawsuit', 'investigation', 'halt', 'trading halt',
                 'export ban', 'export control', 'sanction', 'accounting probe',
-                'guidance cut', 'capex cut', 'order cancellation'
+                'guidance cut', 'capex cut', 'order cancellation',
+                'dilution', 'share dilution', 'stock dilution', 'secondary offering',
+                'share offering', 'public offering', 'offering of shares',
+                'issuing shares', 'issuance of shares'
             ]
             
             for item in news_items:

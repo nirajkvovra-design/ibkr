@@ -91,6 +91,8 @@ class TradingEngine:
         logger.info(f"Connected to account: {config.IB_ACCOUNT}")
         logger.info(f"Trading mode: {'PAPER' if config.PAPER_TRADING else 'LIVE'}")
         logger.info(f"Live orders armed: {config.ENABLE_LIVE_TRADING}")
+        if not self._validate_startup_configuration():
+            return False
         if config.PAPER_TRADING:
             logger.info(
                 "Paper overrides: settled_cash=%s starter_mode=%s market_regime=%s learning=%s",
@@ -112,6 +114,40 @@ class TradingEngine:
         logger.info(f"Max daily loss: ${config.MAX_DAILY_LOSS}")
         
         return True
+        
+    def _validate_startup_configuration(self):
+        """Validate paper/live startup configuration before connecting."""
+        issues = []
+        warnings = []
+
+        if config.PAPER_TRADING:
+            if config.IB_PORT != 7497:
+                warnings.append(
+                    f"PAPER_TRADING=True but IB_PORT={config.IB_PORT}. Confirm this is the intended paper port."
+                )
+        else:
+            if not config.ENABLE_LIVE_TRADING:
+                issues.append(
+                    "LIVE trading mode is configured but ENABLE_LIVE_TRADING=False. "
+                    "Set ENABLE_LIVE_TRADING=True only after manual review and account readiness."
+                )
+            if config.IB_PORT == 7497:
+                issues.append(
+                    "LIVE trading mode should not use paper port 7497. "
+                    "Set IB_PORT=7496 for live trading or keep PAPER_TRADING=True for paper mode."
+                )
+            elif config.IB_PORT != 7496:
+                warnings.append(
+                    f"LIVE trading mode is configured on non-standard port {config.IB_PORT}. "
+                    "Confirm your live TWS/IB Gateway port is correct."
+                )
+
+        for warning in warnings:
+            logger.warning("Startup config warning: %s", warning)
+        for issue in issues:
+            logger.error("Startup config error: %s", issue)
+
+        return len(issues) == 0
         
     def start(self):
         """Start the automated trading engine"""
@@ -261,6 +297,11 @@ class TradingEngine:
                 self._eod_close_done = False
                 
                 logger.info(f"Opening Account Value: ${self.opening_account_value:,.2f}")
+                
+                # Fetch and log the daily market direction/regime
+                regime = self.data_fetcher.get_market_regime()
+                logger.info(f"Daily Market Direction (Regime): {regime}")
+                
                 logger.info("Pre-market setup completed")
                 
             except Exception as e:

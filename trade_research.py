@@ -23,6 +23,7 @@ class TradeResearch:
 
     def build_report(self, strategy, stock_screener, ib_connection, risk_manager):
         now = datetime.now(_TZ)
+        regime = self.data_fetcher.get_market_regime()
         blockers = strategy.get_trading_blockers() if hasattr(strategy, "get_trading_blockers") else []
         can_execute = len(blockers) == 0
 
@@ -63,6 +64,7 @@ class TradeResearch:
         return {
             "timestamp": now.isoformat(timespec="seconds"),
             "market_open": is_market_open(),
+            "market_regime": regime,
             "can_execute_trades": can_execute,
             "blockers": blockers,
             "watchlist": watchlist,
@@ -87,6 +89,7 @@ class TradeResearch:
 
         logger.info("=" * 60)
         logger.info("Market research cycle @ %s", report["timestamp"][-8:])
+        logger.info("Market Regime: %s", report.get("market_regime", "UNKNOWN"))
         logger.info("=" * 60)
 
         if report["blockers"]:
