@@ -52,10 +52,16 @@ class DataFetcher:
                 logger.debug(f"Using cached data for {symbol}")
                 return self.cache[cache_key]
             
-            logger.debug(f"Fetching data for {symbol} from Yahoo Finance")
+            # If symbol is a cryptocurrency, Yahoo Finance requires '-USD' suffix
+            download_symbol = symbol
+            crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+            if symbol.upper() in crypto_list and not symbol.endswith("-USD"):
+                download_symbol = f"{symbol.upper()}-USD"
+
+            logger.debug(f"Fetching data for {download_symbol} from Yahoo Finance")
             
             # Download data
-            data = yf.download(symbol, period=period, interval=interval, 
+            data = yf.download(download_symbol, period=period, interval=interval, 
                              progress=False, threads=False)
             
             if data.empty:
@@ -81,8 +87,16 @@ class DataFetcher:
     def _normalize_yfinance_data(self, data, symbol):
         """Return single-symbol OHLCV columns from yfinance output."""
         if isinstance(data.columns, pd.MultiIndex):
+            # Check both symbol and download_symbol (symbol-USD)
+            download_symbol = symbol
+            crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+            if symbol.upper() in crypto_list and not symbol.endswith("-USD"):
+                download_symbol = f"{symbol.upper()}-USD"
+
             if symbol in data.columns.get_level_values(-1):
                 data = data.xs(symbol, axis=1, level=-1)
+            elif download_symbol in data.columns.get_level_values(-1):
+                data = data.xs(download_symbol, axis=1, level=-1)
             else:
                 data.columns = data.columns.get_level_values(0)
         return data
@@ -333,10 +347,13 @@ class DataFetcher:
 
     def is_trade_free_us_stock_candidate(self, symbol):
         """Check whether a symbol fits the low-fee US stock-only universe."""
-        if not config.TRADE_FREE_US_STOCKS_ONLY:
+        symbol = symbol.upper()
+        crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+        if symbol in crypto_list:
             return True
 
-        symbol = symbol.upper()
+        if not config.TRADE_FREE_US_STOCKS_ONLY:
+            return True
         starter_symbols = set(config.STARTER_STOCKS) if config.STARTER_ACCOUNT_MODE else set()
         allowed_symbols = set(config.ALLOWED_US_STOCKS) | set(config.AI_INFRA_STOCKS) | starter_symbols
         if symbol not in allowed_symbols or symbol in config.EXCLUDED_EVENT_SENSITIVE_STOCKS:

@@ -847,70 +847,31 @@
 
     </div>
 
-    <!-- NEW BREAKOUT WATCHLIST WIDGET -->
+    <!-- DYNAMIC DAILY WINNERS WATCHLIST WIDGET -->
     <div class="card">
       <div class="card-title">
-        <span>BreakoutWatch Scanner Dashboard</span>
-        <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Recent IPO & breakout watch candidates</span>
+        <span>Daily Trending & Winning Watchlist</span>
+        <span style="font-size: 0.8rem; font-weight: normal; color: var(--color-text-sub);">Regime-ranked active trending leaders (Auto-reloading)</span>
       </div>
       <div class="table-container">
         <table>
           <thead>
             <tr>
               <th>Ticker</th>
-              <th>Company Name</th>
-              <th>Range Base Setup</th>
-              <th>Listing Base High</th>
-              <th>Current Distance</th>
-              <th>Volume Confirmation Ratio</th>
-              <th>Strategy Standard Checks</th>
+              <th>Current Price</th>
+              <th>1-Day Change</th>
+              <th>5-Day Change</th>
+              <th>Vol Ratio</th>
+              <th>RSI</th>
+              <th>Regime Setup & Technical Strengths</th>
             </tr>
           </thead>
-          <tbody>
-            <tr class="tr-normal">
-              <td style="font-weight:600; color:var(--color-primary);">RDDT</td>
-              <td>Reddit Inc.</td>
-              <td>Consolidation base (50 days)</td>
-              <td style="font-family:var(--font-mono);">$74.80</td>
-              <td style="color:var(--color-success); font-weight:500;">-1.2% (consolidating)</td>
-              <td style="font-family:var(--font-mono);">1.85x (Confirmed)</td>
-              <td><span class="status-badge status-badge-boosted">READY</span></td>
-            </tr>
-            <tr class="tr-normal">
-              <td style="font-weight:600; color:var(--color-primary);">ARM</td>
-              <td>ARM Holdings plc</td>
-              <td>Technical breakout (110 days)</td>
-              <td style="font-family:var(--font-mono);">$148.50</td>
-              <td style="color:var(--color-primary); font-weight:600;">+2.4% (BREAKOUT ACTIVE)</td>
-              <td style="font-family:var(--font-mono);">2.10x (Confirmed)</td>
-              <td><span class="status-badge status-badge-boosted">ACTIVE</span></td>
-            </tr>
-            <tr class="tr-normal">
-              <td style="font-weight:600; color:var(--color-primary);">ALAB</td>
-              <td>Astera Labs Inc.</td>
-              <td>Early range consolidation (35 days)</td>
-              <td style="font-family:var(--font-mono);">$86.20</td>
-              <td style="color:var(--color-warning); font-weight:500;">-5.8% (consolidating)</td>
-              <td style="font-family:var(--font-mono);">0.95x (Awaiting Spike)</td>
-              <td><span class="status-badge status-badge-normal">SCANNING</span></td>
-            </tr>
-            <tr class="tr-normal">
-              <td style="font-weight:600; color:var(--color-primary);">PLTR</td>
-              <td>Palantir Technologies</td>
-              <td>Large consolidation base</td>
-              <td style="font-family:var(--font-mono);">$44.10</td>
-              <td style="color:var(--color-success); font-weight:500;">-0.8% (Near High)</td>
-              <td style="font-family:var(--font-mono);">1.40x (Near Threshold)</td>
-              <td><span class="status-badge status-badge-boosted">READY</span></td>
-            </tr>
-            <tr class="tr-normal">
-              <td style="font-weight:600; color:var(--color-primary);">SHOP</td>
-              <td>Shopify Inc.</td>
-              <td>Base breakout</td>
-              <td style="font-family:var(--font-mono);">$92.50</td>
-              <td style="color:var(--color-warning); font-weight:500;">-4.1% (Base pullback)</td>
-              <td style="font-family:var(--font-mono);">0.75x (Thin Volume)</td>
-              <td><span class="status-badge status-badge-normal">SCANNING</span></td>
+          <tbody id="watchlistTableBody">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--color-text-sub); font-style: italic; padding: 2rem 0;">
+                <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 1s linear infinite; margin-right: 0.5rem; vertical-align: middle;"></span>
+                Scanning stock market database and scoring trending candidates...
+              </td>
             </tr>
           </tbody>
         </table>
@@ -1832,6 +1793,54 @@
       }
     }
 
+    async function pollWatchlist() {
+      const data = await fetchAPI("/api/watchlist");
+      if (!data || !data.watchlist) return;
+      updateWatchlistTable(data.watchlist);
+    }
+
+    function updateWatchlistTable(watchlist) {
+      const tbody = document.getElementById("watchlistTableBody");
+      if (!watchlist || watchlist.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--color-text-sub); font-style: italic; padding: 2rem 0;">
+              No trending candidates found fitting the current market regime today.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = "";
+      watchlist.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.className = "tr-normal";
+        
+        const change1d = parseFloat(item.change_1d || 0);
+        const change5d = parseFloat(item.change_5d || 0);
+        const rsiVal = item.rsi !== null ? item.rsi : "N/A";
+        
+        const c1dStyle = change1d >= 0 ? "color:var(--color-success); font-weight:600;" : "color:var(--color-danger); font-weight:600;";
+        const c5dStyle = change5d >= 0 ? "color:var(--color-success); font-weight:600;" : "color:var(--color-danger); font-weight:600;";
+        const change1dStr = change1d >= 0 ? `+${change1d.toFixed(2)}%` : `${change1d.toFixed(2)}%`;
+        const change5dStr = change5d >= 0 ? `+${change5d.toFixed(2)}%` : `${change5d.toFixed(2)}%`;
+        
+        const reasonsHtml = (item.reasons || []).map(r => `<span class="boosted-tag" style="background:rgba(168,85,247,0.1); border-color:rgba(168,85,247,0.25); color:var(--color-primary); padding:0.15rem 0.4rem; font-size:0.75rem; margin-right:0.35rem; display:inline-block; border-radius:3px;">${r}</span>`).join("");
+
+        tr.innerHTML = `
+          <td style="font-weight:600; color:var(--color-primary);">${item.symbol}</td>
+          <td style="font-family:var(--font-mono); font-weight:500;">$${parseFloat(item.price).toFixed(2)}</td>
+          <td style="${c1dStyle}">${change1dStr}</td>
+          <td style="${c5dStyle}">${change5dStr}</td>
+          <td style="font-family:var(--font-mono);">${item.volume_ratio.toFixed(2)}x</td>
+          <td style="font-family:var(--font-mono);">${rsiVal}</td>
+          <td>${reasonsHtml || '<span style="color:var(--color-text-sub); font-style:italic; font-size:0.8rem;">Consolidating</span>'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
     // Load options at startup
     setTimeout(loadOptionExpirations, 1200);
 
@@ -1840,12 +1849,14 @@
     pollSystemState();
     pollLogs();
     pollHistory();
+    pollWatchlist();
     setTimeout(loadActiveConfigurations, 1000); // Small buffer to ensure API loaded
     
     // Poll every 3 seconds for state and logs
     setInterval(pollSystemState, 3000);
     setInterval(pollLogs, 3000);
     setInterval(pollHistory, 5000); // Poll trade history less frequently
+    setInterval(pollWatchlist, 30000); // Poll watchlist every 30 seconds
   </script>
 </body>
 </html>

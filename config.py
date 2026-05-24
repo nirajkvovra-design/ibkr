@@ -194,6 +194,9 @@ IPO_MAX_HISTORY_DAYS = _int_env("IPO_MAX_HISTORY_DAYS", 120)  # Max trading days
 IPO_MIN_BASE_DAYS = _int_env("IPO_MIN_BASE_DAYS", 5)  # Min trading days to form an initial price base
 IPO_BREAKOUT_VOLUME_RATIO = _float_env("IPO_BREAKOUT_VOLUME_RATIO", 1.5)  # Volume ratio for breakout confirmation
 
+# Cryptocurrency Configurations
+CRYPTO_SYMBOLS = _list_env("CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+
 
 
 def _apply_env_overrides(overrides):

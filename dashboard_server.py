@@ -178,6 +178,18 @@ class DashboardHTTPHandler(BaseHTTPRequestHandler):
             self.send_json_response(config_data)
             return
 
+        # Serve dynamic trending market winners watchlist
+        elif path == "/api/watchlist":
+            try:
+                from stock_screener import StockScreener
+                screener = StockScreener()
+                watchlist = screener.get_market_winners_watchlist()
+                self.send_json_response({"watchlist": watchlist})
+            except Exception as e:
+                logger.error(f"Error serving watchlist: {e}")
+                self.send_error_response(500, f"Error generating watchlist: {e}")
+            return
+
         # Fetch available option expirations for a symbol
         elif path == "/api/options/expirations":
             query_params = urllib.parse.parse_qs(parsed_url.query)

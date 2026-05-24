@@ -271,9 +271,17 @@ class InteractiveBrokersConnection:
                 return None
 
             contract = Contract()
-            contract.symbol = symbol
-            contract.secType = "STK"
-            contract.exchange = "SMART"
+            contract.symbol = symbol.upper()
+            
+            # Route cryptocurrency tickers to Paxos exchange
+            crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+            if symbol.upper() in crypto_list:
+                contract.secType = "CRYPTO"
+                contract.exchange = "PAXOS"
+            else:
+                contract.secType = "STK"
+                contract.exchange = "SMART"
+                
             contract.currency = "USD"
             
             order = Order()

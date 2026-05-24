@@ -609,3 +609,129 @@ class StockScreener:
         except Exception as e:
             logger.error(f"Error in screen_market_winners: {e}")
             return self._screen_default()
+
+    def get_market_winners_watchlist(self):
+        """
+        Runs the market winners screen and returns a detailed list of dictionaries 
+        containing ticker details, prices, daily changes, and score metrics.
+        """
+        try:
+            regime = self.data_fetcher.get_market_regime()
+            logger.info(f"[Detailed Watchlist] Running market winners screen for {regime}...")
+            
+            candidates = []
+            
+            for symbol in self.default_stocks:
+                try:
+                    if symbol in config.EXCLUDED_EVENT_SENSITIVE_STOCKS:
+                        continue
+                    if not self.data_fetcher.is_trade_free_us_stock_candidate(symbol):
+                        continue
+                    
+                    calendar_risk = self.data_fetcher.get_calendar_risk(symbol)
+                    if calendar_risk['blocked']:
+                        continue
+                        
+                    data = self.data_fetcher.get_stock_data(symbol, period='3mo', interval='1d')
+                    if data is None or len(data) < 20:
+                        continue
+                        
+                    latest = data.iloc[-1]
+                    close = float(latest['Close'])
+                    prev_close = float(data.iloc[-2]['Close'])
+                    sma_20 = latest.get('SMA_20')
+                    sma_50 = latest.get('SMA_50')
+                    sma_200 = latest.get('SMA_200')
+                    volume_ratio = latest.get('Volume_Ratio', 1.0)
+                    rsi = latest.get('RSI')
+                    
+                    # Calculate returns
+                    one_day_change = (close - prev_close) / prev_close
+                    five_day_close = float(data.iloc[-6]['Close']) if len(data) >= 6 else prev_close
+                    five_day_change = (close - five_day_close) / five_day_close
+                    
+                    score = 0
+                    reasons = []
+                    
+                    if regime == 'BULLISH':
+                        if sma_20 and close > float(sma_20):
+                            score += 2
+                            reasons.append("above SMA20")
+                        if sma_50 and close > float(sma_50):
+                            score += 1
+                            reasons.append("above SMA50")
+                        if sma_200 and close > float(sma_200):
+                            score += 1
+                            reasons.append("above SMA200")
+                        if volume_ratio is not None and not pd_isna(volume_ratio) and float(volume_ratio) >= 1.2:
+                            score += 2
+                            reasons.append(f"vol ratio {volume_ratio:.2f}x")
+                        if rsi is not None and 50 < rsi < 70:
+                            score += 2
+                            reasons.append(f"strong RSI {rsi:.1f}")
+                        if five_day_change >= 0.02:
+                            score += 3
+                            reasons.append(f"5d return +{five_day_change*100:.1f}%")
+                        elif five_day_change > 0:
+                            score += 1
+                            reasons.append("5d positive")
+                        if one_day_change >= 0.005:
+                            score += 1
+                            reasons.append(f"1d return +{one_day_change*100:.1f}%")
+                            
+                    elif regime == 'NEUTRAL':
+                        fundamentals = self.data_fetcher.get_fundamental_data(symbol)
+                        pe = fundamentals.get('pe_ratio') if fundamentals else None
+                        
+                        if rsi is not None and 40 <= rsi <= 60:
+                            score += 3
+                            reasons.append(f"stable RSI {rsi:.1f}")
+                        if pe is not None and 10 < pe < 30:
+                            score += 2
+                            reasons.append(f"value PE {pe:.1f}")
+                        if sma_50:
+                            dist_to_sma = abs(close - float(sma_50)) / float(sma_50)
+                            if dist_to_sma < 0.03:
+                                score += 2
+                                reasons.append("stable near SMA50")
+                        if five_day_change >= 0:
+                            score += 1
+                            reasons.append("5d stable")
+                            
+                    elif regime == 'BEARISH':
+                        if five_day_change > 0.005:
+                            score += 4
+                            reasons.append(f"outperforming: 5d +{five_day_change*100:.1f}%")
+                        elif five_day_change >= 0:
+                            score += 2
+                            reasons.append("outperforming: 5d flat/positive")
+                        if sma_20 and close > float(sma_20):
+                            score += 3
+                            reasons.append("strong above SMA20")
+                        if rsi is not None and rsi > 45:
+                            score += 1
+                            reasons.append(f"healthy RSI {rsi:.1f}")
+                        if volume_ratio is not None and not pd_isna(volume_ratio) and float(volume_ratio) >= 1.1:
+                            score += 1
+                            reasons.append("volume accumulation")
+                            
+                    if score > 0:
+                        candidates.append({
+                            'symbol': symbol,
+                            'score': score,
+                            'price': round(close, 2),
+                            'change_1d': round(one_day_change * 100, 2),
+                            'change_5d': round(five_day_change * 100, 2),
+                            'volume_ratio': round(float(volume_ratio), 2) if volume_ratio is not None and not pd_isna(volume_ratio) else 1.0,
+                            'rsi': round(float(rsi), 1) if rsi is not None and not pd_isna(rsi) else None,
+                            'reasons': reasons
+                        })
+                except Exception as ex:
+                    logger.debug(f"Error screening {symbol} in detailed watchlist: {ex}")
+                    
+            candidates.sort(key=lambda x: x['score'], reverse=True)
+            return candidates[:config.MAX_WATCHLIST_SIZE]
+            
+        except Exception as e:
+            logger.error(f"Error in get_market_winners_watchlist: {e}")
+            return []
