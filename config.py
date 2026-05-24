@@ -218,6 +218,12 @@ FUTURE_MULTIPLIERS = {
 
 
 
+# Funding and Capital Leverage Settings
+FUNDING_SOURCE = os.getenv("FUNDING_SOURCE", "CONSERVATIVE")  # options: 'CONSERVATIVE', 'MARGIN', 'BUYING_POWER'
+HIGH_CONFIDENCE_SCALING = _bool_env("HIGH_CONFIDENCE_SCALING", True)
+HIGH_CONFIDENCE_MULTIPLIER = _float_env("HIGH_CONFIDENCE_MULTIPLIER", 1.5)  # Capital scaling multiplier on strongly aligned setups
+
+
 def _apply_env_overrides(overrides):
     """Set module-level settings only when the variable is not set in .env."""
     module_globals = globals()

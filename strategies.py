@@ -336,6 +336,40 @@ class MomentumStrategy(TradingStrategy):
                     current_price = self.data_fetcher.get_current_price(symbol)
                     
                     if current_price is not None and current_price > 0:
+                        # High Confidence Setup resolution: scale sizing for high-probability setups
+                        confidence_multiplier = 1.0
+                        if getattr(config, "HIGH_CONFIDENCE_SCALING", True):
+                            try:
+                                data = self.data_fetcher.get_stock_data(symbol)
+                                if data is not None and len(data) >= 20:
+                                    latest = data.iloc[-1]
+                                    rsi = latest.get('RSI')
+                                    macd = latest.get('MACD')
+                                    macd_sig = latest.get('MACD_Signal')
+                                    vol_ratio = latest.get('Volume_Ratio', 1.0)
+                                    close = float(latest['Close'])
+                                    sma20 = latest.get('SMA_20')
+                                    
+                                    align_count = 0
+                                    if rsi is not None and 30 < rsi < 65:
+                                        align_count += 1
+                                    if macd is not None and macd_sig is not None and float(macd) > float(macd_sig):
+                                        align_count += 1
+                                    if vol_ratio is not None and float(vol_ratio) >= 1.3:
+                                        align_count += 1
+                                    if sma20 is not None and close > float(sma20):
+                                        align_count += 1
+                                        
+                                    sentiment = self.sentiment_analyzer.get_news_sentiment(symbol, limit=5)
+                                    if align_count >= 3 and sentiment == 'BULLISH':
+                                        confidence_multiplier = float(getattr(config, "HIGH_CONFIDENCE_MULTIPLIER", 1.5))
+                                        logger.info(f"[Confidence Sentry] HIGH CONFIDENCE setup triggered for {symbol}! (Alignments: {align_count}/4, Sentiment: BULLISH). Sizing scaled by {confidence_multiplier}x.")
+                            except Exception as e:
+                                logger.debug(f"Confidence score check skipped: {e}")
+
+                        # Apply confidence multiplier to target size
+                        target_size = position_size * confidence_multiplier
+
                         # Sizing adjustments: scale by multipliers for futures, support fractionals for crypto
                         import os
                         multiplier = 1
@@ -350,11 +384,11 @@ class MomentumStrategy(TradingStrategy):
                             multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
                             env_val = os.getenv(f"FUTURE_MULTIPLIER_{clean_sym}")
                             multiplier = int(env_val) if env_val is not None else multipliers.get(clean_sym, 1)
-                            quantity = max(1, int(position_size / (current_price * multiplier)))
+                            quantity = max(1, int(target_size / (current_price * multiplier)))
                         elif is_crypto:
-                            quantity = round(position_size / current_price, 4)
+                            quantity = round(target_size / current_price, 4)
                         else:
-                            quantity = max(1, int(position_size / current_price))
+                            quantity = max(1, int(target_size / current_price))
                             
                         if self.risk_manager and not self.risk_manager.is_within_limits(symbol, quantity, current_price):
                             continue

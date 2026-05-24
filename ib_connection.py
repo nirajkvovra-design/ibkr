@@ -543,19 +543,24 @@ class InteractiveBrokersConnection:
         return self.wrapper.cash
 
     def get_available_funds_for_buys(self):
-        """Return conservative funds available for opening new stock positions."""
-        candidates = [
-            value for value in [
-                self.wrapper.cash,
-                self.wrapper.available_funds,
-                self.wrapper.buying_power,
-            ]
-            if value and value > 0
-        ]
-        if config.REQUIRE_SETTLED_CASH_FOR_BUYS and self.wrapper.settled_cash > 0:
-            candidates.append(self.wrapper.settled_cash)
+        """Return funds available for opening new stock positions based on configured funding source."""
+        source = getattr(config, "FUNDING_SOURCE", "CONSERVATIVE").upper()
+        
+        cash = self.wrapper.cash if self.wrapper.cash > 0 else 0
+        avail = self.wrapper.available_funds if self.wrapper.available_funds > 0 else 0
+        power = self.wrapper.buying_power if self.wrapper.buying_power > 0 else 0
+        settled = self.wrapper.settled_cash if self.wrapper.settled_cash > 0 else 0
 
-        return max(0, min(candidates)) if candidates else 0
+        if source == "BUYING_POWER" and power > 0:
+            return power
+        elif source == "MARGIN" and avail > 0:
+            return avail
+        else:
+            # CONSERVATIVE
+            candidates = [v for v in [cash, avail, power] if v > 0]
+            if config.REQUIRE_SETTLED_CASH_FOR_BUYS and settled > 0:
+                candidates.append(settled)
+            return max(0, min(candidates)) if candidates else 0
 
     def get_account_snapshot(self):
         """Get account values used by risk and sizing checks."""
