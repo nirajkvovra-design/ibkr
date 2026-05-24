@@ -302,6 +302,19 @@ class TradingEngine:
                 regime = self.data_fetcher.get_market_regime()
                 logger.info(f"Daily Market Direction (Regime): {regime}")
                 
+                # Trigger dynamic stock universe expander to discover new thematic winners & IPOs
+                try:
+                    if hasattr(self.stock_screener, "universe_expander"):
+                        logger.info("[Pre-Market] Triggering Dynamic Stock Universe Expander...")
+                        self.stock_screener.universe_expander.expand_universe()
+                        # Re-sync StockScreener's search universe with new discoveries
+                        dynamic_tickers = list(self.stock_screener.universe_expander.discovered_tickers)
+                        if dynamic_tickers:
+                            base_universe = config.STARTER_STOCKS if config.STARTER_ACCOUNT_MODE else (config.AI_INFRA_STOCKS if config.USE_AI_INFRA_UNIVERSE else config.ALLOWED_US_STOCKS)
+                            self.stock_screener.default_stocks = list(set(base_universe + dynamic_tickers))
+                except Exception as ex:
+                    logger.error(f"Error in pre-market stock universe expansion: {ex}")
+                
                 logger.info("Pre-market setup completed")
                 
             except Exception as e:

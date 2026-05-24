@@ -25,6 +25,17 @@ class StockScreener:
             self.default_stocks = config.AI_INFRA_STOCKS
         else:
             self.default_stocks = config.ALLOWED_US_STOCKS
+
+        # Dynamically expand the watchlist with discovered high-tech/IPO stock tickers
+        try:
+            from universe_expander import UniverseExpander
+            self.universe_expander = UniverseExpander(self.data_fetcher)
+            dynamic_tickers = list(self.universe_expander.discovered_tickers)
+            if dynamic_tickers:
+                logger.info(f"[Screener Universe] Merging {len(dynamic_tickers)} dynamic thematic tickers into watchlist pool.")
+                self.default_stocks = list(set(self.default_stocks + dynamic_tickers))
+        except Exception as e:
+            logger.error(f"Error merging dynamic tickers in StockScreener: {e}")
         
     def get_watchlist(self, method='technical'):
         """
