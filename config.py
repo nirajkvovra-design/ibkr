@@ -197,6 +197,25 @@ IPO_BREAKOUT_VOLUME_RATIO = _float_env("IPO_BREAKOUT_VOLUME_RATIO", 1.5)  # Volu
 # Cryptocurrency Configurations
 CRYPTO_SYMBOLS = _list_env("CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
 
+# Futures Configurations
+FUTURE_SYMBOLS = _list_env("FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
+FUTURE_EXCHANGES = {
+    "ES": "CME",
+    "NQ": "CME",
+    "YM": "CBOT",
+    "RTY": "CME",
+    "CL": "NYMEX",
+    "GC": "COMEX"
+}
+FUTURE_MULTIPLIERS = {
+    "ES": 50,
+    "NQ": 20,
+    "YM": 5,
+    "RTY": 50,
+    "CL": 1000,
+    "GC": 100
+}
+
 
 
 def _apply_env_overrides(overrides):

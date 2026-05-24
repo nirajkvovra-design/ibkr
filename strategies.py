@@ -333,11 +333,23 @@ class MomentumStrategy(TradingStrategy):
                 ) * size_multiplier
                 
                 if position_size > 0:
-                    # Get current price
                     current_price = self.data_fetcher.get_current_price(symbol)
                     
                     if current_price is not None and current_price > 0:
-                        quantity = max(1, int(position_size / current_price))
+                        # Sizing adjustments: scale by multipliers for futures, support fractionals for crypto
+                        multiplier = 1
+                        futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
+                        if symbol.upper() in futures_list:
+                            multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
+                            multiplier = multipliers.get(symbol.upper(), 1)
+
+                        if symbol.upper() in futures_list:
+                            quantity = max(1, int(position_size / (current_price * multiplier)))
+                        elif symbol.upper() in getattr(config, "CRYPTO_SYMBOLS", []):
+                            quantity = round(position_size / current_price, 4)
+                        else:
+                            quantity = max(1, int(position_size / current_price))
+                            
                         if self.risk_manager and not self.risk_manager.is_within_limits(symbol, quantity, current_price):
                             continue
 

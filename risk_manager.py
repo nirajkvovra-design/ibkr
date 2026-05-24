@@ -21,7 +21,14 @@ class RiskManager:
         
     def is_within_limits(self, symbol, quantity, entry_price):
         """Check if a trade is within risk limits"""
-        position_value = quantity * entry_price
+        # Factor in contract multipliers for futures to evaluate the true leverage-adjusted exposure
+        multiplier = 1
+        futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
+        if symbol.upper() in futures_list:
+            multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
+            multiplier = multipliers.get(symbol.upper(), 1)
+
+        position_value = quantity * entry_price * multiplier
         
         # 1. Check self-learning blacklist/cooling-off
         if self.learning_agent.is_blacklisted(symbol):

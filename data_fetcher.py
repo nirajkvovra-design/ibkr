@@ -52,11 +52,14 @@ class DataFetcher:
                 logger.debug(f"Using cached data for {symbol}")
                 return self.cache[cache_key]
             
-            # If symbol is a cryptocurrency, Yahoo Finance requires '-USD' suffix
+            # If symbol is a cryptocurrency or future, Yahoo Finance requires special suffixes
             download_symbol = symbol
             crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+            futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
             if symbol.upper() in crypto_list and not symbol.endswith("-USD"):
                 download_symbol = f"{symbol.upper()}-USD"
+            elif symbol.upper() in futures_list and not symbol.endswith("=F"):
+                download_symbol = f"{symbol.upper()}=F"
 
             logger.debug(f"Fetching data for {download_symbol} from Yahoo Finance")
             
@@ -87,11 +90,14 @@ class DataFetcher:
     def _normalize_yfinance_data(self, data, symbol):
         """Return single-symbol OHLCV columns from yfinance output."""
         if isinstance(data.columns, pd.MultiIndex):
-            # Check both symbol and download_symbol (symbol-USD)
+            # Check both symbol and download_symbol (symbol-USD or symbol=F)
             download_symbol = symbol
             crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+            futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
             if symbol.upper() in crypto_list and not symbol.endswith("-USD"):
                 download_symbol = f"{symbol.upper()}-USD"
+            elif symbol.upper() in futures_list and not symbol.endswith("=F"):
+                download_symbol = f"{symbol.upper()}=F"
 
             if symbol in data.columns.get_level_values(-1):
                 data = data.xs(symbol, axis=1, level=-1)
@@ -349,7 +355,8 @@ class DataFetcher:
         """Check whether a symbol fits the low-fee US stock-only universe."""
         symbol = symbol.upper()
         crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
-        if symbol in crypto_list:
+        futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
+        if symbol in crypto_list or symbol in futures_list:
             return True
 
         if not config.TRADE_FREE_US_STOCKS_ONLY:

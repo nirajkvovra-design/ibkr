@@ -275,9 +275,19 @@ class InteractiveBrokersConnection:
             
             # Route cryptocurrency tickers to Paxos exchange
             crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
+            futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
+            
             if symbol.upper() in crypto_list:
                 contract.secType = "CRYPTO"
                 contract.exchange = "PAXOS"
+            elif symbol.upper() in futures_list:
+                contract.secType = "FUT"
+                exchanges = getattr(config, "FUTURE_EXCHANGES", {})
+                contract.exchange = exchanges.get(symbol.upper(), "CME")
+                from utils import get_front_month_future
+                contract.lastTradeDateOrContractMonth = get_front_month_future(symbol)
+                multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
+                contract.multiplier = str(multipliers.get(symbol.upper(), ""))
             else:
                 contract.secType = "STK"
                 contract.exchange = "SMART"
