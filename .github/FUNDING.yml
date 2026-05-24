@@ -1,0 +1,12 @@
+# GitHub Sponsors Button Configuration
+# For full details, see: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# Stage 1: GitHub Sponsors platform
+github: [nirajkvovra-design]
+
+# Stage 2: Alternative sponsorship platforms (Uncomment and replace with your handles to activate)
+# patreon: your_patreon_username
+# ko_fi: your_kofi_username
+# open_collective: your_opencollective_username
+# liberapay: your_liberapay_username
+# custom: ["https://your-custom-donation-link.com"]
