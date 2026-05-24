@@ -22,11 +22,16 @@ class RiskManager:
     def is_within_limits(self, symbol, quantity, entry_price):
         """Check if a trade is within risk limits"""
         # Factor in contract multipliers for futures to evaluate the true leverage-adjusted exposure
+        import os
         multiplier = 1
+        clean_sym = symbol.upper().replace("-USD", "").replace("=F", "")
         futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
-        if symbol.upper() in futures_list:
+        is_future = symbol.upper() in futures_list or symbol.upper().endswith("=F") or os.getenv(f"FUTURE_EXCHANGE_{clean_sym}") is not None
+        
+        if is_future:
             multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
-            multiplier = multipliers.get(symbol.upper(), 1)
+            env_val = os.getenv(f"FUTURE_MULTIPLIER_{clean_sym}")
+            multiplier = int(env_val) if env_val is not None else multipliers.get(clean_sym, 1)
 
         position_value = quantity * entry_price * multiplier
         

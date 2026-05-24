@@ -337,15 +337,21 @@ class MomentumStrategy(TradingStrategy):
                     
                     if current_price is not None and current_price > 0:
                         # Sizing adjustments: scale by multipliers for futures, support fractionals for crypto
+                        import os
                         multiplier = 1
+                        clean_sym = symbol.upper().replace("-USD", "").replace("=F", "")
+                        crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
                         futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
-                        if symbol.upper() in futures_list:
-                            multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
-                            multiplier = multipliers.get(symbol.upper(), 1)
+                        
+                        is_crypto = symbol.upper() in crypto_list or symbol.upper().endswith("-USD") or os.getenv(f"CRYPTO_EXCHANGE_{clean_sym}") is not None
+                        is_future = symbol.upper() in futures_list or symbol.upper().endswith("=F") or os.getenv(f"FUTURE_EXCHANGE_{clean_sym}") is not None
 
-                        if symbol.upper() in futures_list:
+                        if is_future:
+                            multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
+                            env_val = os.getenv(f"FUTURE_MULTIPLIER_{clean_sym}")
+                            multiplier = int(env_val) if env_val is not None else multipliers.get(clean_sym, 1)
                             quantity = max(1, int(position_size / (current_price * multiplier)))
-                        elif symbol.upper() in getattr(config, "CRYPTO_SYMBOLS", []):
+                        elif is_crypto:
                             quantity = round(position_size / current_price, 4)
                         else:
                             quantity = max(1, int(position_size / current_price))

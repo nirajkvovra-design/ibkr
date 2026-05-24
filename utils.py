@@ -143,10 +143,17 @@ def get_front_month_future(symbol):
     Handles quarterly rolls on the 10th of March (03), June (06), September (09), and December (12).
     Monthly rolls for commodities on the 20th of each preceding month.
     """
+    import os
+    sym = symbol.upper()
+    
+    # Check for manual contract month override in the environment (e.g. FUTURE_CONTRACT_MONTH_ES=202612)
+    env_override = os.getenv(f"FUTURE_CONTRACT_MONTH_{sym}")
+    if env_override:
+        return env_override
+        
     now = datetime.now()
     year = now.year
     month = now.month
-    sym = symbol.upper()
     
     if sym in {"ES", "NQ", "YM", "RTY"}:
         if month < 3 or (month == 3 and now.day < 10):

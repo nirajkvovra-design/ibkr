@@ -53,13 +53,18 @@ class DataFetcher:
                 return self.cache[cache_key]
             
             # If symbol is a cryptocurrency or future, Yahoo Finance requires special suffixes
+            import os
             download_symbol = symbol
             crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
             futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
-            if symbol.upper() in crypto_list and not symbol.endswith("-USD"):
-                download_symbol = f"{symbol.upper()}-USD"
-            elif symbol.upper() in futures_list and not symbol.endswith("=F"):
-                download_symbol = f"{symbol.upper()}=F"
+            clean_sym = symbol.upper().replace("-USD", "").replace("=F", "")
+            is_crypto = symbol.upper() in crypto_list or symbol.upper().endswith("-USD") or os.getenv(f"CRYPTO_EXCHANGE_{clean_sym}") is not None
+            is_future = symbol.upper() in futures_list or symbol.upper().endswith("=F") or os.getenv(f"FUTURE_EXCHANGE_{clean_sym}") is not None
+            
+            if is_crypto and not symbol.endswith("-USD"):
+                download_symbol = f"{clean_sym}-USD"
+            elif is_future and not symbol.endswith("=F"):
+                download_symbol = f"{clean_sym}=F"
 
             logger.debug(f"Fetching data for {download_symbol} from Yahoo Finance")
             
@@ -91,13 +96,18 @@ class DataFetcher:
         """Return single-symbol OHLCV columns from yfinance output."""
         if isinstance(data.columns, pd.MultiIndex):
             # Check both symbol and download_symbol (symbol-USD or symbol=F)
+            import os
             download_symbol = symbol
             crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
             futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
-            if symbol.upper() in crypto_list and not symbol.endswith("-USD"):
-                download_symbol = f"{symbol.upper()}-USD"
-            elif symbol.upper() in futures_list and not symbol.endswith("=F"):
-                download_symbol = f"{symbol.upper()}=F"
+            clean_sym = symbol.upper().replace("-USD", "").replace("=F", "")
+            is_crypto = symbol.upper() in crypto_list or symbol.upper().endswith("-USD") or os.getenv(f"CRYPTO_EXCHANGE_{clean_sym}") is not None
+            is_future = symbol.upper() in futures_list or symbol.upper().endswith("=F") or os.getenv(f"FUTURE_EXCHANGE_{clean_sym}") is not None
+            
+            if is_crypto and not symbol.endswith("-USD"):
+                download_symbol = f"{clean_sym}-USD"
+            elif is_future and not symbol.endswith("=F"):
+                download_symbol = f"{clean_sym}=F"
 
             if symbol in data.columns.get_level_values(-1):
                 data = data.xs(symbol, axis=1, level=-1)
@@ -353,10 +363,16 @@ class DataFetcher:
 
     def is_trade_free_us_stock_candidate(self, symbol):
         """Check whether a symbol fits the low-fee US stock-only universe."""
+        import os
         symbol = symbol.upper()
         crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
         futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
-        if symbol in crypto_list or symbol in futures_list:
+        clean_sym = symbol.replace("-USD", "").replace("=F", "")
+        
+        is_crypto = symbol in crypto_list or symbol.endswith("-USD") or os.getenv(f"CRYPTO_EXCHANGE_{clean_sym}") is not None
+        is_future = symbol in futures_list or symbol.endswith("=F") or os.getenv(f"FUTURE_EXCHANGE_{clean_sym}") is not None
+        
+        if is_crypto or is_future:
             return True
 
         if not config.TRADE_FREE_US_STOCKS_ONLY:

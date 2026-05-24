@@ -273,21 +273,31 @@ class InteractiveBrokersConnection:
             contract = Contract()
             contract.symbol = symbol.upper()
             
-            # Route cryptocurrency tickers to Paxos exchange
+            # Route cryptocurrency and futures tickers dynamically with future-proof overrides
+            import os
             crypto_list = getattr(config, "CRYPTO_SYMBOLS", ["BTC", "ETH", "LTC", "BCH"])
             futures_list = getattr(config, "FUTURE_SYMBOLS", ["ES", "NQ", "YM", "CL", "GC"])
             
-            if symbol.upper() in crypto_list:
+            clean_sym = symbol.upper().replace("-USD", "").replace("=F", "")
+            is_crypto = symbol.upper() in crypto_list or symbol.upper().endswith("-USD") or os.getenv(f"CRYPTO_EXCHANGE_{clean_sym}") is not None
+            is_future = symbol.upper() in futures_list or symbol.upper().endswith("=F") or os.getenv(f"FUTURE_EXCHANGE_{clean_sym}") is not None
+            
+            # Update contract symbol to clean symbol (without suffixes) for TWS API compatibility
+            contract.symbol = clean_sym
+            
+            if is_crypto:
                 contract.secType = "CRYPTO"
-                contract.exchange = "PAXOS"
-            elif symbol.upper() in futures_list:
+                contract.exchange = os.getenv(f"CRYPTO_EXCHANGE_{clean_sym}", "PAXOS")
+            elif is_future:
                 contract.secType = "FUT"
                 exchanges = getattr(config, "FUTURE_EXCHANGES", {})
-                contract.exchange = exchanges.get(symbol.upper(), "CME")
+                contract.exchange = os.getenv(f"FUTURE_EXCHANGE_{clean_sym}", exchanges.get(clean_sym, "CME"))
+                
                 from utils import get_front_month_future
-                contract.lastTradeDateOrContractMonth = get_front_month_future(symbol)
+                contract.lastTradeDateOrContractMonth = get_front_month_future(clean_sym)
+                
                 multipliers = getattr(config, "FUTURE_MULTIPLIERS", {})
-                contract.multiplier = str(multipliers.get(symbol.upper(), ""))
+                contract.multiplier = str(os.getenv(f"FUTURE_MULTIPLIER_{clean_sym}", multipliers.get(clean_sym, "")))
             else:
                 contract.secType = "STK"
                 contract.exchange = "SMART"
