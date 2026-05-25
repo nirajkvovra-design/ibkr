@@ -40,8 +40,13 @@ class LiveApprovalGate:
 
         logger.info("[Approval Gate] Running pre-flight automated test suites: %s...", ", ".join(test_files))
         try:
+            # Resolve pytest path relative to workspace root
+            pytest_path = os.path.join(".venv", "Scripts", "pytest.exe")
+            if not os.path.exists(pytest_path):
+                pytest_path = "pytest"  # Fallback to system path
+
             # Execute pytest as a subprocess
-            cmd = ["pytest", "-q"] + test_files
+            cmd = [pytest_path, "-q"] + test_files
             # Run with a 60-second timeout to prevent hangs
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             
@@ -85,10 +90,7 @@ class LiveApprovalGate:
         """
         try:
             # Gather latencies from the metrics collector if populated
-            latencies = []
-            for metric in self.metrics_collector.metrics_buffer:
-                if metric.name == "execution_latency_ms":
-                    latencies.append(metric.value)
+            latencies = self.metrics_collector.latencies
             
             if not latencies:
                 # Default to normal baseline in absence of live execution samples
