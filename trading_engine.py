@@ -7,12 +7,18 @@ import pytz
 import config
 from utils import get_logger, is_market_open, format_trade_log, setup_logging, send_alert, update_health_status
 from ib_connection import InteractiveBrokersConnection
-from strategies import MomentumStrategy, GridTradingStrategy, MachineLearningStrategy, PairsTradingStrategy, VolatilityBreakoutStrategy, IPOBreakoutStrategy
+from strategies import MomentumStrategy, GridTradingStrategy, MachineLearningStrategy, PairsTradingStrategy, VolatilityBreakoutStrategy, IPOBreakoutStrategy, CorrelatedLaggardStrategy
 from risk_manager import RiskManager
 from data_fetcher import DataFetcher
 from stock_screener import StockScreener
 from trade_research import TradeResearch
+from core.order_manager import OrderManager
+from core.models import OrderRequest, OrderSide, OrderType
+from core.market_data import MarketDataEngine
 import daily_positions
+import asyncio
+from core.event_engine import EventEngine, Event, EVENT_HEALTH, EVENT_RISK, EVENT_FILL, EVENT_SIGNAL, EVENT_ORDER, EVENT_TICK
+from core.metrics_collector import MetricsCollector
 from engine_control import (
     clear_pid,
     clear_restart_request,
@@ -30,10 +36,18 @@ class TradingEngine:
     def __init__(self):
         setup_logging()
         self.ib_connection = InteractiveBrokersConnection()
+        self.order_manager = OrderManager(self.ib_connection)
         self.risk_manager = RiskManager(self.ib_connection)
         self.data_fetcher = DataFetcher()
+        self.market_data = MarketDataEngine(self.data_fetcher)
         self.stock_screener = StockScreener()
         self.research = TradeResearch(self.data_fetcher)
+        
+        # Institutional Observability Core
+        self.event_engine = EventEngine()
+        self.metrics_collector = MetricsCollector()
+        self.risk_manager.metrics_collector = self.metrics_collector  # Wire up reference
+        
         self.strategy = None
         self.running = False
         self._eod_close_done = False
@@ -73,20 +87,24 @@ class TradingEngine:
         # Initialize strategy based on configuration
         strategy_choice = getattr(config, "SELECTED_STRATEGY", "MOMENTUM").upper()
         if strategy_choice == "ML":
-            self.strategy = MachineLearningStrategy(self.ib_connection, self.risk_manager)
+            self.strategy = MachineLearningStrategy(self.ib_connection, self.risk_manager, self.order_manager)
             logger.info(f"Instantiated MachineLearningStrategy using {config.ML_MODEL_TYPE} model.")
         elif strategy_choice == "PAIRS":
-            self.strategy = PairsTradingStrategy(self.ib_connection, self.risk_manager)
+            self.strategy = PairsTradingStrategy(self.ib_connection, self.risk_manager, self.order_manager)
             logger.info("Instantiated PairsTradingStrategy (Statistical Arbitrage).")
         elif strategy_choice == "BREAKOUT":
-            self.strategy = VolatilityBreakoutStrategy(self.ib_connection, self.risk_manager)
+            self.strategy = VolatilityBreakoutStrategy(self.ib_connection, self.risk_manager, self.order_manager)
             logger.info("Instantiated VolatilityBreakoutStrategy.")
         elif strategy_choice == "IPO":
-            self.strategy = IPOBreakoutStrategy(self.ib_connection, self.risk_manager)
+            self.strategy = IPOBreakoutStrategy(self.ib_connection, self.risk_manager, self.order_manager)
             logger.info("Instantiated IPOBreakoutStrategy (Stock Chart Base Breakout).")
+        elif strategy_choice == "LAGGER":
+            self.strategy = CorrelatedLaggardStrategy(self.ib_connection, self.risk_manager, self.order_manager)
+            logger.info("Instantiated CorrelatedLaggardStrategy (Thematic Lead-Lag Sector Arbitrage).")
         else:
-            self.strategy = MomentumStrategy(self.ib_connection, self.risk_manager)
+            self.strategy = MomentumStrategy(self.ib_connection, self.risk_manager, self.order_manager)
             logger.info("Instantiated default MomentumStrategy.")
+
         
         logger.info(f"Connected to account: {config.IB_ACCOUNT}")
         logger.info(f"Trading mode: {'PAPER' if config.PAPER_TRADING else 'LIVE'}")
@@ -158,6 +176,22 @@ class TradingEngine:
         self.running = True
         logger.info("Trading engine started successfully")
         
+        # Start the Asynchronous Event Engine in a dedicated background thread
+        self._async_loop = asyncio.new_event_loop()
+        
+        def run_async_loop(loop):
+            asyncio.set_event_loop(loop)
+            self.event_engine.start()
+            loop.run_forever()
+
+        self._async_thread = threading.Thread(target=run_async_loop, args=(self._async_loop,), daemon=True)
+        self._async_thread.start()
+        logger.info("Asynchronous EventEngine thread started successfully.")
+        
+        # Submit the connection watchdog coroutine to the async loop thread-safely
+        asyncio.run_coroutine_threadsafe(self.monitor_broker_connection(), self._async_loop)
+        logger.info("Asynchronous Connection Watchdog submitted to EventEngine loop.")
+        
         # Schedule tasks
         self._setup_schedule()
         
@@ -201,6 +235,62 @@ class TradingEngine:
         while self.running:
             schedule.run_pending()
             time.sleep(1)
+
+    async def monitor_broker_connection(self):
+        """Asynchronous Watchdog loop that polls connection status and auto-heals outages."""
+        logger.info("[Watchdog Sentry] Connection Sentry started.")
+        while self.running:
+            try:
+                await asyncio.sleep(10)
+                
+                connected = self.ib_connection.connected
+                if not connected:
+                    logger.critical("[Watchdog Sentry] Broker disconnection detected! Engaging emergency safeties...")
+                    
+                    # 1. Trigger the emergency Kill Switch in RiskManager
+                    self.risk_manager.engage_kill_switch()
+                    
+                    # 2. Cancel all stale/pending orders
+                    try:
+                        self.order_manager.cancel_stale_orders()
+                        logger.warning("[Watchdog Sentry] Stale orders cancelled during recovery sequence.")
+                    except Exception as err:
+                        logger.error(f"[Watchdog Sentry] Error cancelling stale orders: {err}")
+                        
+                    # 3. Attempt reconnection loop
+                    logger.info("[Watchdog Sentry] Starting reconnection attempt...")
+                    reconnect_success = False
+                    
+                    # Try to reconnect a few times
+                    for attempt in range(1, 4):
+                        logger.info(f"[Watchdog Sentry] Reconnection attempt {attempt}/3...")
+                        try:
+                            # Run in executor to prevent blocking the async event loop if socket creation blocks
+                            loop = asyncio.get_running_loop()
+                            reconnect_success = await loop.run_in_executor(None, self.ib_connection.connect)
+                            if reconnect_success:
+                                logger.info("[Watchdog Sentry] Reconnection successful!")
+                                break
+                        except Exception as conn_err:
+                            logger.error(f"[Watchdog Sentry] Connection attempt {attempt} raised exception: {conn_err}")
+                        await asyncio.sleep(5)
+                        
+                    if reconnect_success:
+                        # 4. Synchronize positions and safely deactivate Kill Switch
+                        try:
+                            self.ib_connection.refresh_account_data()
+                            positions = self.ib_connection.get_positions()
+                            daily_positions.sync_from_ib_positions(positions)
+                            logger.info("[Watchdog Sentry] Local positions and state successfully synchronized.")
+                        except Exception as sync_err:
+                            logger.error(f"[Watchdog Sentry] Error synchronizing state after reconnect: {sync_err}")
+                            
+                        # Safely deactivate the Kill Switch
+                        self.risk_manager.disengage_kill_switch()
+                    else:
+                        logger.critical("[Watchdog Sentry] Reconnection attempts exhausted. System remains in LOCKDOWN mode.")
+            except Exception as e:
+                logger.error(f"[Watchdog Sentry] Error in watchdog monitoring loop: {e}")
             
     def _health_check(self):
         """Check IB connection health, update status, and alert on connection loss."""
@@ -232,7 +322,7 @@ class TradingEngine:
             self._last_connection_status = connected
 
         if self.running:
-            self.ib_connection.cancel_stale_orders()
+            self.order_manager.cancel_stale_orders()
 
         if self.running and not connected:
             send_alert(
@@ -407,15 +497,19 @@ class TradingEngine:
                     if limit_price is None:
                         logger.warning(f"Skipping stop-loss sell for {symbol}: limit price unavailable")
                         continue
-                    order_id = self.ib_connection.place_order(
-                        symbol,
-                        "SELL",
-                        quantity,
-                        order_type="LMT",
-                        limit_price=limit_price,
-                        metadata={"entry_price": avg_cost},
-                    )
+
+                    # Tax Safety Gate check before selling
+                    if not self.risk_manager.check_tax_safety_gate(symbol, quantity, limit_price):
+                        logger.warning(f"Stop-loss sell for {symbol} blocked by tax safety gates")
+                        continue
+
+                    req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(quantity), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": avg_cost})
+                    if getattr(self, "order_manager", None):
+                        order_id = self.order_manager.submit_order_with_confirmation(req)
+                    else:
+                        order_id = self.ib_connection.place_order(symbol, "SELL", quantity, order_type="LMT", limit_price=limit_price, metadata={"entry_price": avg_cost})
                     if order_id:
+                        self.risk_manager.tax_manager.process_sell(symbol, quantity, limit_price, order_id=order_id)
                         self.risk_manager.remove_position(symbol)
                         daily_positions.record_close(symbol)
                         
@@ -424,15 +518,19 @@ class TradingEngine:
                     if limit_price is None:
                         logger.warning(f"Skipping take-profit sell for {symbol}: limit price unavailable")
                         continue
-                    order_id = self.ib_connection.place_order(
-                        symbol,
-                        "SELL",
-                        quantity,
-                        order_type="LMT",
-                        limit_price=limit_price,
-                        metadata={"entry_price": avg_cost},
-                    )
+
+                    # Tax Safety Gate check before selling
+                    if not self.risk_manager.check_tax_safety_gate(symbol, quantity, limit_price):
+                        logger.warning(f"Take-profit sell for {symbol} blocked by tax safety gates")
+                        continue
+
+                    req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(quantity), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": avg_cost})
+                    if getattr(self, "order_manager", None):
+                        order_id = self.order_manager.submit_order_with_confirmation(req)
+                    else:
+                        order_id = self.ib_connection.place_order(symbol, "SELL", quantity, order_type="LMT", limit_price=limit_price, metadata={"entry_price": avg_cost})
                     if order_id:
+                        self.risk_manager.tax_manager.process_sell(symbol, quantity, limit_price, order_id=order_id)
                         self.risk_manager.remove_position(symbol)
                         daily_positions.record_close(symbol)
                         
@@ -473,15 +571,19 @@ class TradingEngine:
                 if limit_price is None:
                     logger.warning(f"EOD: could not price SELL for {symbol}")
                     continue
-                order_id = self.ib_connection.place_order(
-                    symbol,
-                    "SELL",
-                    qty,
-                    order_type="LMT",
-                    limit_price=limit_price,
-                    metadata={"entry_price": positions[symbol].get("avg_cost")},
-                )
+
+                # Tax Safety Gate check before selling
+                if not self.risk_manager.check_tax_safety_gate(symbol, qty, limit_price):
+                    logger.warning(f"EOD close for {symbol} blocked by tax safety gates")
+                    continue
+
+                req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(qty), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": positions[symbol].get("avg_cost")})
+                if getattr(self, "order_manager", None):
+                    order_id = self.order_manager.submit_order_with_confirmation(req)
+                else:
+                    order_id = self.ib_connection.place_order(symbol, "SELL", qty, order_type="LMT", limit_price=limit_price, metadata={"entry_price": positions[symbol].get("avg_cost")})
                 if order_id:
+                    self.risk_manager.tax_manager.process_sell(symbol, qty, limit_price, order_id=order_id)
                     closed.append(symbol)
                     self.risk_manager.remove_position(symbol)
                     daily_positions.record_close(symbol)
@@ -560,15 +662,19 @@ class TradingEngine:
                 if limit_price is None:
                     logger.warning(f"Skipping close for {symbol}: limit price unavailable")
                     continue
-                order_id = self.ib_connection.place_order(
-                    symbol,
-                    "SELL",
-                    quantity,
-                    order_type="LMT",
-                    limit_price=limit_price,
-                    metadata={"entry_price": pos_info.get("avg_cost")},
-                )
+
+                # Tax Safety Gate check before selling
+                if not self.risk_manager.check_tax_safety_gate(symbol, quantity, limit_price):
+                    logger.warning(f"Close all for {symbol} blocked by tax safety gates")
+                    continue
+
+                req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(quantity), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": pos_info.get("avg_cost")})
+                if getattr(self, "order_manager", None):
+                    order_id = self.order_manager.submit_order_with_confirmation(req)
+                else:
+                    order_id = self.ib_connection.place_order(symbol, "SELL", quantity, order_type="LMT", limit_price=limit_price, metadata={"entry_price": pos_info.get("avg_cost")})
                 if order_id:
+                    self.risk_manager.tax_manager.process_sell(symbol, quantity, limit_price, order_id=order_id)
                     logger.info(f"Close order submitted for position: {symbol}")
                 
         except Exception as e:
@@ -603,6 +709,16 @@ class TradingEngine:
         logger.info("Stopping trading engine...")
         self.running = False
         
+        # Gracefully stop the event engine and its loop thread
+        if hasattr(self, "event_engine"):
+            try:
+                # Stop the event loop inside the async thread thread-safely
+                if hasattr(self, "_async_loop") and self._async_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(self.event_engine.stop(), self._async_loop).result()
+                    self._async_loop.call_soon_threadsafe(self._async_loop.stop)
+            except Exception as e:
+                logger.error("Error stopping EventEngine: %s", e)
+
         # Do not automatically liquidate on normal shutdown. Stop-loss/take-profit
         # and explicit strategy exits manage positions during scheduled operation.
         

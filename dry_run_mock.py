@@ -13,6 +13,7 @@ from trade_research import TradeResearch
 import daily_positions
 import trading_engine as te
 import utils
+from core.models import OrderRequest, OrderSide, OrderType
 
 
 class MockIBConnection:
@@ -89,6 +90,22 @@ class MockIBConnection:
         print('MockIBConnection: disconnect()')
 
 
+class MockOrderManager:
+    """Simple adapter to emulate OrderManager behavior for dry-run tests."""
+    def __init__(self, ib_connection):
+        self.ib = ib_connection
+
+    def submit_order_with_confirmation(self, request: OrderRequest):
+        # Convert OrderRequest into legacy ib_connection call for the mock
+        action = request.action.value if hasattr(request.action, 'value') else str(request.action)
+        order_type = request.order_type.value if hasattr(request.order_type, 'value') else str(request.order_type)
+        limit_price = float(request.limit_price) if request.limit_price is not None else None
+        return self.ib.place_order(request.symbol, action, int(request.quantity), order_type=order_type, limit_price=limit_price, metadata=request.metadata)
+
+    def submit_order(self, request: OrderRequest):
+        return self.submit_order_with_confirmation(request)
+
+
 class MockDataFetcher:
     def get_current_price(self, symbol):
         prices = {'AAPL': 145.0, 'MSFT': 305.0}
@@ -111,9 +128,10 @@ class MockDataFetcher:
 
 
 class MockStrategy:
-    def __init__(self, ib_connection, risk_manager=None):
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
         self.ib_connection = ib_connection
         self.risk_manager = risk_manager
+        self.order_manager = order_manager
         self.daily_trades = 0
         self.daily_profit_loss = 0
 
@@ -134,10 +152,18 @@ class MockStrategy:
             if action == 'SELL':
                 qty = self.ib_connection.get_positions().get(symbol, {}).get('quantity', 0)
                 if qty > 0:
-                    self.ib_connection.place_order(symbol, 'SELL', qty, order_type='LMT', limit_price=145.0)
+                    if getattr(self, 'order_manager', None):
+                        req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(qty), order_type=OrderType.LMT, limit_price=145.0)
+                        self.order_manager.submit_order_with_confirmation(req)
+                    else:
+                        self.ib_connection.place_order(symbol, 'SELL', qty, order_type='LMT', limit_price=145.0)
                     self.daily_trades += 1
             elif action == 'BUY':
-                self.ib_connection.place_order(symbol, 'BUY', 1, order_type='LMT', limit_price=305.0)
+                if getattr(self, 'order_manager', None):
+                    req = OrderRequest(symbol=symbol, action=OrderSide.BUY, quantity=1, order_type=OrderType.LMT, limit_price=305.0)
+                    self.order_manager.submit_order_with_confirmation(req)
+                else:
+                    self.ib_connection.place_order(symbol, 'BUY', 1, order_type='LMT', limit_price=305.0)
                 self.daily_trades += 1
 
 
@@ -206,9 +232,11 @@ def run_dry_run():
 
     engine = TradingEngine()
     engine.ib_connection = MockIBConnection()
+    engine.order_manager = MockOrderManager(engine.ib_connection)
     engine.data_fetcher = MockDataFetcher()
     engine.risk_manager = MockRiskManager()
     engine.strategy = MockStrategy(engine.ib_connection, engine.risk_manager)
+    engine.strategy.order_manager = engine.order_manager
     engine.stock_screener = MockStockScreener()
     engine.research = TradeResearch(engine.data_fetcher)
 

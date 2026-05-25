@@ -50,10 +50,10 @@ def test_tws():
         
         snapshot = ib.get_account_snapshot()
         print("\n--- Account Live Snapshot ---")
-        print(f"Net Liquidation Value (Equity): ${snapshot.get('net_liquidation', 0.0):,.2f}")
-        print(f"Total Cash                    : ${snapshot.get('total_cash', 0.0):,.2f}")
-        print(f"Settled Cash                  : ${snapshot.get('settled_cash', 0.0):,.2f}")
-        print(f"Buying Power for New Buys     : ${snapshot.get('funds_for_new_buys', 0.0):,.2f}")
+        print(f"Net Liquidation Value (Equity): ${getattr(snapshot, 'net_liquidation', 0.0):,.2f}")
+        print(f"Total Cash                    : ${getattr(snapshot, 'total_cash', 0.0):,.2f}")
+        print(f"Settled Cash                  : ${getattr(snapshot, 'settled_cash', 0.0):,.2f}")
+        print(f"Buying Power for New Buys     : ${getattr(snapshot, 'funds_for_new_buys', 0.0):,.2f}")
         
         # Request Open Positions
         print("\nRequesting active portfolio positions...")
@@ -64,7 +64,7 @@ def test_tws():
             print("  No active positions found in this paper/demo account.")
         else:
             for symbol, info in positions.items():
-                print(f"  Ticker: {symbol:<6} | Quantity: {info['quantity']:<6} | Average Cost: ${info['avg_cost']:,.2f}")
+                print(f"  Ticker: {symbol:<6} | Quantity: {getattr(info, 'quantity', 0):<6} | Average Cost: ${getattr(info, 'avg_cost', 0.0):,.2f}")
                 
         print("\n" + "=" * 60)
         print("[SUCCESS] API connection to TWS is 100% functional and verified!")

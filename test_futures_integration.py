@@ -32,6 +32,12 @@ from utils import get_front_month_future
 class TestFuturesIntegration(unittest.TestCase):
     def setUp(self):
         self.fetcher = DataFetcher()
+        self._orig_dynamic_risk = getattr(config, "DYNAMIC_RISK_SCALING", True)
+        self._orig_use_limit = getattr(config, "USE_LIMIT_ORDERS_ONLY", True)
+
+    def tearDown(self):
+        config.DYNAMIC_RISK_SCALING = self._orig_dynamic_risk
+        config.USE_LIMIT_ORDERS_ONLY = self._orig_use_limit
 
     def test_front_month_rollover_calculation(self):
         """Test 1: Check quarterly index and monthly commodity futures rollover logic"""
@@ -128,6 +134,8 @@ class TestFuturesIntegration(unittest.TestCase):
         
         # Instantiate connection
         conn = InteractiveBrokersConnection()
+        if hasattr(conn, "safety_gate"):
+            del conn.safety_gate
         conn.connected = True
         conn.wrapper = MagicMock()
         conn.wrapper.next_order_id = 100

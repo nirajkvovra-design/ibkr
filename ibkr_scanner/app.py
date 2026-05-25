@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import uuid
 
@@ -17,8 +17,8 @@ class BlogPost(db.Model):
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(50), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class PortfolioProject(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -28,7 +28,7 @@ class PortfolioProject(db.Model):
     github_link = db.Column(db.String(200))
     live_link = db.Column(db.String(200))
     image_url = db.Column(db.String(200))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class FitnessPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -39,7 +39,7 @@ class FitnessPlan(db.Model):
     features = db.Column(db.Text, nullable=False)
     image_url = db.Column(db.String(200))
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,7 +51,7 @@ class Order(db.Model):
     payment_method = db.Column(db.String(50), nullable=False)
     payment_status = db.Column(db.String(50), default='pending')
     transaction_id = db.Column(db.String(200))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationship
     fitness_plan = db.relationship('FitnessPlan', backref='orders')
@@ -173,7 +173,7 @@ def edit_blog_post(post_id):
         post.title = request.form['title']
         post.content = request.form['content']
         post.category = request.form['category']
-        post.updated_at = datetime.utcnow()
+        post.updated_at = datetime.now(timezone.utc)
         
         db.session.commit()
         flash('Blog post updated successfully!', 'success')

@@ -35,7 +35,10 @@ class DummyIBConnection:
         logger.info(f"[Offline Place Order] {side} {quantity} shares of {symbol} at limit ${limit_price:.2f}")
         return 99999
 
-def test_forecasting_pipeline(tickers):
+def test_forecasting_pipeline(tickers=None):
+    if tickers is None:
+        tickers = ["INTC", "BAC", "F"]
+
     logger.info("=" * 60)
     logger.info("Starting Offline Machine Learning Strategy Test")
     logger.info("=" * 60)

@@ -82,6 +82,8 @@ class TestCryptoIntegration(unittest.TestCase):
         
         # Instantiate connection
         conn = InteractiveBrokersConnection()
+        if hasattr(conn, "safety_gate"):
+            del conn.safety_gate
         conn.connected = True
         conn.wrapper = MagicMock()
         conn.wrapper.next_order_id = 100

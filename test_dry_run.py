@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import daily_positions
 import trading_engine
@@ -48,6 +48,18 @@ class MockIBConnection:
     def wait_for_order_filled(self, order_id, timeout=None):
         return False
 
+    def place_order_with_confirmation(self, symbol_or_request, action=None, quantity=None, order_type='LMT', limit_price=None, metadata=None, timeout=None, retry=None, fallback_to_market=None):
+        if hasattr(symbol_or_request, 'symbol') and hasattr(symbol_or_request, 'action'):
+            return self.place_order(
+                symbol_or_request.symbol,
+                symbol_or_request.action,
+                symbol_or_request.quantity,
+                order_type=symbol_or_request.order_type,
+                limit_price=symbol_or_request.limit_price,
+                metadata=symbol_or_request.metadata,
+            )
+        return self.place_order(symbol_or_request, action, quantity, order_type=order_type, limit_price=limit_price, metadata=metadata)
+
     def has_pending_orders(self):
         return False
 
@@ -90,12 +102,19 @@ class MockDataFetcher:
     def get_calendar_risk(self, symbol):
         return {'blocked': False, 'reason': ''}
 
+    def get_market_regime(self):
+        return 'BULLISH'
+
 
 class MockRiskManager:
     def __init__(self):
         self.open_positions = {}
         self.stop_loss_prices = {}
         self.take_profit_prices = {}
+        self.tax_manager = MagicMock()
+
+    def check_tax_safety_gate(self, symbol, quantity, limit_price):
+        return True
 
     def update_daily_pnl(self, pnl):
         self.daily_loss = pnl
@@ -133,9 +152,10 @@ class MockRiskManager:
 
 
 class MockStrategy:
-    def __init__(self, ib_connection, risk_manager=None):
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
         self.ib_connection = ib_connection
         self.risk_manager = risk_manager
+        self.order_manager = order_manager
         self.daily_trades = 0
         self.daily_profit_loss = 0
 
@@ -180,6 +200,7 @@ class TradingEngineDryRunTest(unittest.TestCase):
 
         self.engine = TradingEngine()
         self.engine.ib_connection = MockIBConnection()
+        self.engine.order_manager = trading_engine.OrderManager(self.engine.ib_connection)
         self.engine.data_fetcher = MockDataFetcher()
         self.engine.risk_manager = MockRiskManager()
         self.engine.stock_screener = MockStockScreener()

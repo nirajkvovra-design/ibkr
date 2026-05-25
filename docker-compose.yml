@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Main Quantitative Trading Engine Daemon
+  trading-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quant-trading-engine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - IB_HOST=${IB_HOST:-127.0.0.1}
+      - IB_PORT=${IB_PORT:-7497}
+      - IB_CLIENTID=${IB_CLIENTID:-1}
+      - IB_ACCOUNT=${IB_ACCOUNT:-}
+      - PAPER_TRADING=${PAPER_TRADING:-true}
+      - ENABLE_LIVE_TRADING=${ENABLE_LIVE_TRADING:-false}
+    volumes:
+      # Map logs and state caches to local directory for host observability & restart resilience
+      - ./trading_logs.txt:/app/trading_logs.txt
+      - ./trading_alerts.log:/app/trading_alerts.log
+      - ./.state_cache.json:/app/.state_cache.json
+      - ./daily_positions.json:/app/daily_positions.json
+      - ./daily_positions.csv:/app/daily_positions.csv
+      - ./sentry_health.json:/app/sentry_health.json
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Optional Dashboard and Analytics Server
+  dashboard-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quant-trading-dashboard
+    restart: unless-stopped
+    command: python dashboard_server.py
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./trading_logs.txt:/app/trading_logs.txt
+      - ./trading_alerts.log:/app/trading_alerts.log
+      - ./.state_cache.json:/app/.state_cache.json
+      - ./sentry_health.json:/app/sentry_health.json
+    depends_on:
+      - trading-engine

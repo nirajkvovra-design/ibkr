@@ -333,6 +333,8 @@ class DataFetcher:
                 'quote_type': info.get('quoteType'),
                 'exchange': info.get('exchange'),
                 'ex_dividend_date': info.get('exDividendDate') or info.get('dividendDate'),
+                'country': info.get('country'),
+                'long_name': info.get('longName'),
             }
             
             self.fundamental_cache[cache_key] = fundamentals
@@ -385,6 +387,20 @@ class DataFetcher:
         fundamentals = self.get_fundamental_data(symbol)
         if not fundamentals:
             return False
+
+        # 1. Skip ADRs or out-of-country stocks based on country field
+        country = fundamentals.get('country')
+        if country and country.upper() not in ('UNITED STATES', 'US', 'U.S.', 'U.S.A.', 'USA'):
+            logger.info(f"Skipping {symbol}: foreign stock or ADR from country '{country}' to avoid ADR/custody fees.")
+            return False
+
+        # 2. Skip ADRs based on long name keywords (ADR, Depositary, Depository)
+        long_name = fundamentals.get('long_name')
+        if long_name:
+            name_upper = long_name.upper()
+            if "ADR" in name_upper or "DEPOSITARY" in name_upper or "DEPOSITORY" in name_upper:
+                logger.info(f"Skipping {symbol}: identified as ADR/Depositary Receipt ({long_name}) to avoid pass-through fees.")
+                return False
 
         price = fundamentals.get('price') or self.get_current_price(symbol)
         market_cap = fundamentals.get('market_cap')

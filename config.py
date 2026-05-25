@@ -33,8 +33,8 @@ IB_CLIENTID = _int_env("IB_CLIENTID", 1)
 IB_ACCOUNT = os.getenv("IB_ACCOUNT", "")  # Leave empty to use default, or specify account ID
 
 # Trading Hours (24-hour format, assumes US/Eastern timezone)
-TRADING_HOURS_START = 9  # 9:30 AM
-TRADING_MINUTES_START = 30
+TRADING_HOURS_START = 9  # 9:00 AM
+TRADING_MINUTES_START = 0
 TRADING_HOURS_END = 16  # 4:00 PM
 TRADING_MINUTES_END = 0
 
@@ -56,6 +56,7 @@ EARNINGS_BLACKOUT_DAYS_BEFORE = _int_env("EARNINGS_BLACKOUT_DAYS_BEFORE", 3)
 EARNINGS_BLACKOUT_DAYS_AFTER = _int_env("EARNINGS_BLACKOUT_DAYS_AFTER", 1)
 DIVIDEND_BLACKOUT_DAYS_BEFORE = _int_env("DIVIDEND_BLACKOUT_DAYS_BEFORE", 1)
 DIVIDEND_BLACKOUT_DAYS_AFTER = _int_env("DIVIDEND_BLACKOUT_DAYS_AFTER", 2)
+SIMULATE_PORTFOLIO_VALUE = _float_env("SIMULATE_PORTFOLIO_VALUE", 0.0)  # Set to a positive float (e.g. 2000) to simulate a smaller account in paper trading
 
 
 # Strategy Settings
@@ -223,6 +224,14 @@ FUNDING_SOURCE = os.getenv("FUNDING_SOURCE", "CONSERVATIVE")  # options: 'CONSER
 HIGH_CONFIDENCE_SCALING = _bool_env("HIGH_CONFIDENCE_SCALING", True)
 HIGH_CONFIDENCE_MULTIPLIER = _float_env("HIGH_CONFIDENCE_MULTIPLIER", 1.5)  # Capital scaling multiplier on strongly aligned setups
 
+# Tax Management Settings
+SHORT_TERM_TAX_RATE = _float_env("SHORT_TERM_TAX_RATE", 0.30)  # Default short-term capital gains tax rate
+LONG_TERM_TAX_RATE = _float_env("LONG_TERM_TAX_RATE", 0.15)    # Default long-term capital gains tax rate
+TAX_IMPLICATION_WARNING_THRESHOLD = _float_env("TAX_IMPLICATION_WARNING_THRESHOLD", 100.0) # Warn if estimated tax on a sale is >= $100
+ENABLE_TAX_SAFETY_GATES = _bool_env("ENABLE_TAX_SAFETY_GATES", False) # If True, enables checks to potentially block or limit sales with high tax liability
+TAX_LOTS_FILE = os.getenv("TAX_LOTS_FILE", "tax_lots.json")
+
+
 
 def _apply_env_overrides(overrides):
     """Set module-level settings only when the variable is not set in .env."""
@@ -261,3 +270,30 @@ if PAPER_TRADING:
             "MAX_WATCHLIST_SIZE": 12,
             "NEWS_TRENDING_MIN_SCORE": 2,
         })
+
+
+# Correlated Laggard Sector Catch-Up Settings
+THEMATIC_CORRELATIONS = {
+    "AI_HARDWARE": {
+        "leader": "NVDA",
+        "laggards": ["AMD", "SMCI", "AVGO", "MU"]
+    },
+    "CLOUD_SOFTWARE": {
+        "leader": "MSFT",
+        "laggards": ["ORCL", "CRM", "NOW", "ADBE"]
+    },
+    "E_COMMERCE": {
+        "leader": "AMZN",
+        "laggards": ["SHOP", "MELI"]
+    },
+    "MOBILE_TECH": {
+        "leader": "AAPL",
+        "laggards": ["QCOM", "ADI", "MPWR"]
+    }
+}
+
+LAGGER_LEADER_MIN_RETURN = 0.015       # Leader must rise at least 1.5% to trigger catch-up trade
+LAGGER_LEADER_MIN_VOLUME_RATIO = 1.2    # Leader must break out on above-average volume
+LAGGER_MAX_CATCHUP_RATIO = 0.3          # Laggard's return must be < 30% of leader's return
+LAGGER_MAX_RSI = 60.0                   # Laggard must not be overbought (RSI < 60)
+

@@ -3,29 +3,31 @@
 Options Strategy Advisor: Dynamic options strategy generator.
 Translates options chain diagnostics (Max Pain, Walls, and Put/Call ratios)
 into exact, low-capital option spread recommendations (Credit Spreads, Iron Butterflies).
-Tailored specifically for minimum capital trading setups.
+Integrates with OptionsIntelligenceEngine for exact Greek exposures and Probability of Profit (PoP).
 """
 
 import sys
 import argparse
 from pathlib import Path
+from datetime import datetime
 
 # Add script directory to search path
 sys.path.append(str(Path(__file__).parent.resolve()))
 import option_analyzer
 import config
+from options_intelligence import OptionsIntelligenceEngine
 
 # Set up encoding support for Windows CMD
-import sys
 if hasattr(sys.stdout, 'reconfigure'):
     try:
         sys.stdout.reconfigure(encoding='utf-8')
     except Exception:
         pass
 
+
 def recommend_options_strategy(symbol, expiration_date=None, max_collateral=500.0):
     """
-    Analyzes options chain and recommends low-capital option strategies.
+    Analyzes options chain and recommends low-capital option strategies with exact Greeks and PoP.
     
     Args:
         symbol: Stock ticker
@@ -51,24 +53,48 @@ def recommend_options_strategy(symbol, expiration_date=None, max_collateral=500.
     if not cp or not mp:
         print(f"[-] Required metrics unavailable for {symbol}")
         return None
+
+    # Calculate days remaining
+    try:
+        exp_date = datetime.strptime(results['expiration_date'], '%Y-%m-%d')
+        days_to_expiry = max(1.0, float((exp_date - datetime.now()).days))
+    except Exception:
+        days_to_expiry = 30.0  # Fallback to standard monthly expiration window
         
-    print("\n" + "="*80)
-    print(f" OPTIONS STRATEGY ADVISOR FOR {symbol} ({results['expiration_date']})")
-    print(f" Current Price: ${cp:.2f} | Max Pain Pin: ${mp:.2f} | Put/Call Ratio (OI): {pcr_oi}")
-    print(f" Resistance (Call Wall): ${cw:.2f} | Support (Put Wall): ${pw:.2f}")
-    print("="*80)
+    # Instantiate Options Intelligence Engine
+    engine = OptionsIntelligenceEngine()
+    
+    print("\n" + "="*85)
+    print(f" INSTITUTIONAL OPTIONS STRATEGY ADVISOR FOR {symbol} ({results['expiration_date']})")
+    print(f" Underlier Price: ${cp:.2f} | Days To Expiry: {int(days_to_expiry)}d | Max Pain Strike: ${mp:.2f}")
+    print(f" Support (Put Wall): ${pw:.2f} | Resistance (Call Wall): ${cw:.2f} | PCR (Open Interest): {pcr_oi:.2f}")
+    print("="*85)
     
     recommendations = []
+
+    # Helper function to find option price, IV, bid, ask
+    def get_option_metrics(df, strike_price):
+        if df is None or df.empty:
+            return 0.0, 0.25, 0.0, 0.0, strike_price
+        idx = (df['strike'] - strike_price).abs().idxmin()
+        row = df.loc[idx]
+        bid = float(row.get('bid', 0.0))
+        ask = float(row.get('ask', 0.0))
+        last = float(row.get('lastPrice', 0.0))
+        iv = float(row.get('impliedVolatility', 0.25))
+        
+        price = 0.5 * (bid + ask) if bid > 0 and ask > 0 else last
+        if price <= 0:
+            price = last if last > 0 else 0.01
+            
+        return price, iv, bid, ask, float(row['strike'])
     
     # ----------------------------------------------------
-    # STRATEGY 1: Short Iron Butterfly (Neutral/Pinning play)
+    # STRATEGY 1: Short Iron Butterfly (Neutral Pin)
     # ----------------------------------------------------
-    # Best when price is close to Max Pain and Put/Call Ratio is neutral
     is_neutral = 0.8 <= pcr_oi <= 1.25
     dist_to_mp = abs(cp - mp) / mp
     
-    # We choose a wing width that fits within our maximum collateral budget
-    # Settle on a standard spread width (e.g. $2.50 or $5.00 width depending on price)
     if cp > 150:
         wing_width = 5.0
     elif cp > 50:
@@ -76,7 +102,6 @@ def recommend_options_strategy(symbol, expiration_date=None, max_collateral=500.
     else:
         wing_width = 1.0
         
-    # Ensure wing width stays within user's max risk/collateral
     if wing_width * 100 > max_collateral:
         wing_width = max_collateral / 100.0
         
@@ -84,38 +109,55 @@ def recommend_options_strategy(symbol, expiration_date=None, max_collateral=500.
     long_put_strike = short_strike - wing_width
     long_call_strike = short_strike + wing_width
     
-    # Estimate premium credit collected (ATM straddle is typically ~6-10% of stock price)
-    # For Iron Butterfly, we collect ATM credit and buy wings. Collect ~40-60% of wing width as net credit.
-    est_credit_butterfly = round(wing_width * 0.50, 2)
-    max_risk_butterfly = round(wing_width - est_credit_butterfly, 2)
+    # Fetch real options chain data for the legs
+    sc_price, sc_iv, _, _, actual_sc_strike = get_option_metrics(data['calls'], short_strike)
+    sp_price, sp_iv, _, _, actual_sp_strike = get_option_metrics(data['puts'], short_strike)
+    lc_price, lc_iv, _, _, actual_lc_strike = get_option_metrics(data['calls'], long_call_strike)
+    lp_price, lp_iv, _, _, actual_lp_strike = get_option_metrics(data['puts'], long_put_strike)
+    
+    # Combined spread net credit
+    est_credit_butterfly = max(0.1, (sc_price + sp_price) - (lc_price + lp_price))
+    max_risk_butterfly = max(0.05, wing_width - est_credit_butterfly)
+    
+    # Calculate Greeks of short legs
+    g_sc = engine.calculate_greeks(symbol, actual_sc_strike, days_to_expiry, cp, sc_iv, "CALL")
+    g_sp = engine.calculate_greeks(symbol, actual_sp_strike, days_to_expiry, cp, sp_iv, "PUT")
+    
+    net_theta = g_sc["theta"] + g_sp["theta"]
+    
+    # Probability of Profit (break-evens)
+    lower_be = actual_sc_strike - est_credit_butterfly
+    upper_be = actual_sc_strike + est_credit_butterfly
+    pop_butterfly = engine.calculate_probability_of_profit(
+        cp, days_to_expiry, 0.5 * (sc_iv + sp_iv), lower_break_even=lower_be, upper_break_even=upper_be
+    )
     
     butterfly_rec = {
         "name": "Short Iron Butterfly (Max Pain Neutral Pin)",
         "suitability": "HIGH" if (dist_to_mp < 0.04 and is_neutral) else "MEDIUM",
-        "description": f"Sells an ATM Straddle at the Max Pain strike (${short_strike:.2f}) and buys OTM wings to limit risk. Profitable if {symbol} stays rangebound and converges to Max Pain at expiration.",
+        "description": f"Sells an ATM Straddle at the Max Pain strike (${actual_sc_strike:.2f}) and buys OTM wings to limit risk. Profitable if {symbol} stays rangebound and converges to Max Pain.",
         "legs": [
-            f"Sell 1x Call @ Strike ${short_strike:.2f} (ATM)",
-            f"Sell 1x Put @ Strike ${short_strike:.2f} (ATM)",
-            f"Buy  1x Call @ Strike ${long_call_strike:.2f} (OTM Protection)",
-            f"Buy  1x Put  @ Strike ${long_put_strike:.2f} (OTM Protection)"
+            f"Sell 1x Call @ Strike ${actual_sc_strike:.2f} (Mid: ${sc_price:.2f}, IV: {sc_iv*100:.1f}%)",
+            f"Sell 1x Put  @ Strike ${actual_sp_strike:.2f} (Mid: ${sp_price:.2f}, IV: {sp_iv*100:.1f}%)",
+            f"Buy  1x Call @ Strike ${actual_lc_strike:.2f} (OTM Protection, Mid: ${lc_price:.2f})",
+            f"Buy  1x Put  @ Strike ${actual_lp_strike:.2f} (OTM Protection, Mid: ${lp_price:.2f})"
         ],
         "metrics": {
             "net_credit_collected": f"${est_credit_butterfly * 100:.0f} (${est_credit_butterfly:.2f} per share)",
-            "max_profit": f"${est_credit_butterfly * 100:.0f} (if stock pins exactly at ${short_strike:.2f})",
+            "max_profit": f"${est_credit_butterfly * 100:.0f} (if stock pins exactly at ${actual_sc_strike:.2f})",
             "max_risk_collateral": f"${max_risk_butterfly * 100:.0f} (${max_risk_butterfly:.2f} per share)",
             "margin_requirement": f"${wing_width * 100:.0f} (Width of spread)",
-            "breakeven_range": f"${short_strike - est_credit_butterfly:.2f} to ${short_strike + est_credit_butterfly:.2f}"
+            "breakeven_range": f"${lower_be:.2f} to ${upper_be:.2f}",
+            "net_short_theta": f"${abs(net_theta)*100:.2f} decay/day",
+            "probability_of_profit": f"{pop_butterfly:.1f}%"
         }
     }
     recommendations.append(butterfly_rec)
     
     # ----------------------------------------------------
-    # STRATEGY 2: Bull Put Credit Spread (Bullish Income play)
+    # STRATEGY 2: Bull Put Credit Spread (Bullish Income)
     # ----------------------------------------------------
-    # Best when Put/Call ratio is low (bullish) or price is near support Put Wall
-    # Sell Put at Support Strike, Buy Put below it.
     put_short_strike = pw if pw and pw < cp else round(cp * 0.95, 1)
-    # Ensure it's slightly OTM
     if put_short_strike >= cp:
         put_short_strike = round(cp * 0.96, 1)
         
@@ -125,57 +167,79 @@ def recommend_options_strategy(symbol, expiration_date=None, max_collateral=500.
         
     put_long_strike = put_short_strike - spread_width
     
-    # Estimate OTM put credit (~15-25% of spread width)
-    est_credit_put_spread = round(spread_width * 0.25, 2)
-    max_risk_put_spread = round(spread_width - est_credit_put_spread, 2)
+    # Fetch real options
+    sp_price, sp_iv, _, _, actual_sp_strike = get_option_metrics(data['puts'], put_short_strike)
+    lp_price, lp_iv, _, _, actual_lp_strike = get_option_metrics(data['puts'], put_long_strike)
+    
+    est_credit_put_spread = max(0.05, sp_price - lp_price)
+    max_risk_put_spread = max(0.05, (actual_sp_strike - actual_lp_strike) - est_credit_put_spread)
+    
+    g_sp = engine.calculate_greeks(symbol, actual_sp_strike, days_to_expiry, cp, sp_iv, "PUT")
+    be_point_put = actual_sp_strike - est_credit_put_spread
+    pop_put_spread = engine.calculate_probability_of_profit(
+        cp, days_to_expiry, sp_iv, lower_break_even=be_point_put
+    )
     
     put_spread_rec = {
         "name": "Bull Put Credit Spread (Bullish Income)",
-        "suitability": "HIGH" if (pcr_oi < 0.85 or cp > put_short_strike) else "MEDIUM",
-        "description": f"Sells an OTM Put at the support wall (${put_short_strike:.2f}) and buys a lower Put for protection. Highly profitable if {symbol} stays above the support wall at expiration.",
+        "suitability": "HIGH" if (pcr_oi < 0.85 or cp > actual_sp_strike) else "MEDIUM",
+        "description": f"Sells an OTM Put at the support wall (${actual_sp_strike:.2f}) and buys a lower Put for protection. Highly profitable if {symbol} stays above support wall.",
         "legs": [
-            f"Sell 1x Put @ Strike ${put_short_strike:.2f} (Support Wall)",
-            f"Buy  1x Put @ Strike ${put_long_strike:.2f} (OTM Protection)"
+            f"Sell 1x Put @ Strike ${actual_sp_strike:.2f} (Support, Mid: ${sp_price:.2f}, IV: {sp_iv*100:.1f}%)",
+            f"Buy  1x Put @ Strike ${actual_lp_strike:.2f} (OTM Protection, Mid: ${lp_price:.2f})"
         ],
         "metrics": {
             "net_credit_collected": f"${est_credit_put_spread * 100:.0f} (${est_credit_put_spread:.2f} per share)",
-            "max_profit": f"${est_credit_put_spread * 100:.0f} (if stock expires above ${put_short_strike:.2f})",
+            "max_profit": f"${est_credit_put_spread * 100:.0f} (if stock expires above ${actual_sp_strike:.2f})",
             "max_risk_collateral": f"${max_risk_put_spread * 100:.0f} (${max_risk_put_spread:.2f} per share)",
-            "margin_requirement": f"${spread_width * 100:.0f} (Width of spread)",
-            "breakeven_point": f"${put_short_strike - est_credit_put_spread:.2f}"
+            "margin_requirement": f"${(actual_sp_strike - actual_lp_strike)*100:.0f} (Width of spread)",
+            "breakeven_point": f"${be_point_put:.2f}",
+            "short_leg_delta": f"{g_sp['delta']:.3f} (Short Put)",
+            "short_leg_theta": f"${abs(g_sp['theta'])*100:.2f} decay/day",
+            "probability_of_profit": f"{pop_put_spread:.1f}%"
         }
     }
     recommendations.append(put_spread_rec)
     
     # ----------------------------------------------------
-    # STRATEGY 3: Bear Call Credit Spread (Bearish Income play)
+    # STRATEGY 3: Bear Call Credit Spread (Bearish Income)
     # ----------------------------------------------------
-    # Best when Put/Call ratio is high (bearish) or price is near resistance Call Wall
-    # Sell Call at Resistance Strike, Buy Call above it.
     call_short_strike = cw if cw and cw > cp else round(cp * 1.05, 1)
     if call_short_strike <= cp:
         call_short_strike = round(cp * 1.04, 1)
         
     call_long_strike = call_short_strike + spread_width
     
-    # Estimate OTM call credit
-    est_credit_call_spread = round(spread_width * 0.25, 2)
-    max_risk_call_spread = round(spread_width - est_credit_call_spread, 2)
+    # Fetch real options
+    sc_price, sc_iv, _, _, actual_sc_strike = get_option_metrics(data['calls'], call_short_strike)
+    lc_price, lc_iv, _, _, actual_lc_strike = get_option_metrics(data['calls'], call_long_strike)
+    
+    est_credit_call_spread = max(0.05, sc_price - lc_price)
+    max_risk_call_spread = max(0.05, (actual_lc_strike - actual_sc_strike) - est_credit_call_spread)
+    
+    g_sc = engine.calculate_greeks(symbol, actual_sc_strike, days_to_expiry, cp, sc_iv, "CALL")
+    be_point_call = actual_sc_strike + est_credit_call_spread
+    pop_call_spread = engine.calculate_probability_of_profit(
+        cp, days_to_expiry, sc_iv, upper_break_even=be_point_call
+    )
     
     call_spread_rec = {
         "name": "Bear Call Credit Spread (Bearish Income)",
-        "suitability": "HIGH" if (pcr_oi > 1.25 or cp < call_short_strike) else "MEDIUM",
-        "description": f"Sells an OTM Call at the resistance wall (${call_short_strike:.2f}) and buys a higher Call for protection. Highly profitable if {symbol} stays below the resistance wall at expiration.",
+        "suitability": "HIGH" if (pcr_oi > 1.25 or cp < actual_sc_strike) else "MEDIUM",
+        "description": f"Sells an OTM Call at the resistance wall (${actual_sc_strike:.2f}) and buys a higher Call for protection. Highly profitable if {symbol} stays below resistance wall.",
         "legs": [
-            f"Sell 1x Call @ Strike ${call_short_strike:.2f} (Resistance Wall)",
-            f"Buy  1x Call @ Strike ${call_long_strike:.2f} (OTM Protection)"
+            f"Sell 1x Call @ Strike ${actual_sc_strike:.2f} (Resistance, Mid: ${sc_price:.2f}, IV: {sc_iv*100:.1f}%)",
+            f"Buy  1x Call @ Strike ${actual_lc_strike:.2f} (OTM Protection, Mid: ${lc_price:.2f})"
         ],
         "metrics": {
             "net_credit_collected": f"${est_credit_call_spread * 100:.0f} (${est_credit_call_spread:.2f} per share)",
-            "max_profit": f"${est_credit_call_spread * 100:.0f} (if stock expires below ${call_short_strike:.2f})",
+            "max_profit": f"${est_credit_call_spread * 100:.0f} (if stock expires below ${actual_sc_strike:.2f})",
             "max_risk_collateral": f"${max_risk_call_spread * 100:.0f} (${max_risk_call_spread:.2f} per share)",
-            "margin_requirement": f"${spread_width * 100:.0f} (Width of spread)",
-            "breakeven_point": f"${call_short_strike + est_credit_call_spread:.2f}"
+            "margin_requirement": f"${(actual_lc_strike - actual_sc_strike)*100:.0f} (Width of spread)",
+            "breakeven_point": f"${be_point_call:.2f}",
+            "short_leg_delta": f"{g_sc['delta']:.3f} (Short Call)",
+            "short_leg_theta": f"${abs(g_sc['theta'])*100:.2f} decay/day",
+            "probability_of_profit": f"{pop_call_spread:.1f}%"
         }
     }
     recommendations.append(call_spread_rec)
@@ -189,19 +253,20 @@ def recommend_options_strategy(symbol, expiration_date=None, max_collateral=500.
         print("   Legs:")
         for leg in rec['legs']:
             print(f"     - {leg}")
-        print("   Strategy Economics (1 Contract):")
+        print("   Strategy Quantitative Economics:")
         for key, val in rec['metrics'].items():
             k_name = key.replace("_", " ").title()
-            print(f"     - {k_name:<22}: {val}")
+            print(f"     - {k_name:<24}: {val}")
             
-    print("\n" + "="*80)
-    print(" Option Spread Capital Efficiency Tip:")
-    print(" Unlike buying naked calls/puts which decay rapidly due to Theta (time decay),")
-    print(" credit spreads let you sell high-decay options to collect premium, protected")
-    print(" by a long option. This caps your absolute risk and lets time decay work FOR you!")
-    print("="*80 + "\n")
+    print("\n" + "="*85)
+    print(" Institutional Options Risk Reminder:")
+    print(" Theta is the short-seller's best friend. Premium decay accelerates dramatically")
+    print(" during the final 30 days before expiration, providing high statistical edge.")
+    print(" Always confirm short delta is kept low (<0.30) to preserve high win-rate.")
+    print("="*85 + "\n")
     
     return recommendations
+
 
 def main():
     parser = argparse.ArgumentParser(description="Generate low-capital options spread recommendations.")
@@ -211,6 +276,7 @@ def main():
     
     args = parser.parse_args()
     recommend_options_strategy(args.symbol, args.expiration, args.max_risk)
+
 
 if __name__ == "__main__":
     main()

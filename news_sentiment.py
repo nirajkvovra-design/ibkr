@@ -55,7 +55,11 @@ class NewsSentiment:
             'accounting': 1.0, 'probe': 1.0, 'disappointing': 0.9, 'negative': 0.7, 'concern': 0.7,
             'competition': 0.6, 'challenged': 0.7, 'pressure': 0.6, 'headwind': 0.7,
             'dilution': 1.1, 'share dilution': 1.1, 'stock dilution': 1.1, 'secondary offering': 1.1,
-            'share offering': 1.0, 'public offering': 0.9
+            'share offering': 1.0, 'public offering': 0.9,
+            'military escalation': 1.3, 'military action': 1.3, 'missile strike': 1.3, 'cyber attack': 1.2,
+            'tariff': 1.1, 'trade war': 1.2, 'inflation shock': 1.2, 'interest rate spike': 1.1,
+            'opec cut': 1.1, 'crude spike': 1.0, 'geopolitical shock': 1.3, 'nuclear escalation': 1.5,
+            'war': 1.4
         }
         
         # Earnings-related keywords
@@ -790,4 +794,39 @@ class NewsSentiment:
         except Exception as e:
             logger.error(f"Error generating alerts: {e}")
             return []
+
+    def get_geopolitical_risk_multiplier(self, headlines: Optional[List[Dict[str, Any]]] = None) -> float:
+        """
+        Evaluate rolling headlines to calculate a de-risking multiplier (0.2x to 1.0x).
+        Lower values mean more severe geopolitical/macro conflict, indicating risk-off.
+        """
+        if headlines is None:
+            headlines = self.get_market_news_context(limit=10)
+        if not headlines:
+            return 1.0
+
+        severe_triggers = {
+            "war": 0.4,
+            "military escalation": 0.3,
+            "missile strike": 0.3,
+            "nuclear": 0.2,
+            "trade war": 0.5,
+            "tariff": 0.7,
+            "cyber attack": 0.6,
+            "opec cut": 0.7,
+            "sanctions": 0.7
+        }
+
+        min_multiplier = 1.0
+        for item in headlines:
+            title = item.get("title", "").lower()
+            for trigger, multiplier in severe_triggers.items():
+                pattern = rf"\b{re.escape(trigger)}\b" if len(trigger) <= 4 else re.escape(trigger)
+                if re.search(pattern, title):
+                    logger.warning("[News Sentry] Geopolitical trigger '%s' detected in headline: '%s'. De-risking factor: %.2fx",
+                                   trigger, item.get("title", "")[:80], multiplier)
+                    if multiplier < min_multiplier:
+                        min_multiplier = multiplier
+
+        return min_multiplier
 

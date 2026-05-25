@@ -1,0 +1,8 @@
+{
+    "daily_loss": 0,
+    "open_positions": {},
+    "stop_loss_prices": {
+        "AAPL": 97.0
+    },
+    "take_profit_prices": {}
+}

@@ -26,8 +26,25 @@ from data_fetcher import DataFetcher
 
 class TestFundingAndConfidence(unittest.TestCase):
     def setUp(self):
+        self._orig_confidence_scaling = getattr(config, "HIGH_CONFIDENCE_SCALING", True)
+        self._orig_confidence_multiplier = getattr(config, "HIGH_CONFIDENCE_MULTIPLIER", 1.5)
+        self._orig_funding_source = getattr(config, "FUNDING_SOURCE", "CONSERVATIVE")
+        self._orig_require_settled = getattr(config, "REQUIRE_SETTLED_CASH_FOR_BUYS", True)
+        self._orig_pos_size_percent = getattr(config, "POSITION_SIZE_PERCENT", 0.05)
+        self._orig_dynamic_risk = getattr(config, "DYNAMIC_RISK_SCALING", True)
+        self._orig_max_pos_size = getattr(config, "MAX_POSITION_SIZE", 50.0)
+
         config.HIGH_CONFIDENCE_SCALING = True
         config.HIGH_CONFIDENCE_MULTIPLIER = 1.5
+
+    def tearDown(self):
+        config.HIGH_CONFIDENCE_SCALING = self._orig_confidence_scaling
+        config.HIGH_CONFIDENCE_MULTIPLIER = self._orig_confidence_multiplier
+        config.FUNDING_SOURCE = self._orig_funding_source
+        config.REQUIRE_SETTLED_CASH_FOR_BUYS = self._orig_require_settled
+        config.POSITION_SIZE_PERCENT = self._orig_pos_size_percent
+        config.DYNAMIC_RISK_SCALING = self._orig_dynamic_risk
+        config.MAX_POSITION_SIZE = self._orig_max_pos_size
 
     def test_available_funds_selectors(self):
         """Test 1: Verify get_available_funds_for_buys scales correctly based on FUNDING_SOURCE"""

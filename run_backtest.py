@@ -7,7 +7,8 @@ import pandas as pd
 # Setup local paths
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from backtester import BacktestEngine
-from strategies import MomentumStrategy, MachineLearningStrategy, VolatilityBreakoutStrategy, PairsTradingStrategy
+from strategies import MomentumStrategy, MachineLearningStrategy, VolatilityBreakoutStrategy, PairsTradingStrategy, CorrelatedLaggardStrategy
+
 from utils import setup_logging
 
 def parse_args():
@@ -93,7 +94,7 @@ def main():
         print(f"Error backtesting Volatility Breakout Strategy: {e}")
 
     # 4. Run Pairs Trading Strategy Backtest
-    print("\n[Backtesting 4/4] Running PairsTradingStrategy (Statistical Arbitrage)...")
+    print("\n[Backtesting 4/5] Running PairsTradingStrategy (Statistical Arbitrage)...")
     try:
         pairs_res = engine.run(PairsTradingStrategy)
         if pairs_res:
@@ -102,16 +103,26 @@ def main():
     except Exception as e:
         print(f"Error backtesting Pairs Trading Strategy: {e}")
 
+    # 5. Run Correlated Laggard Strategy Backtest
+    print("\n[Backtesting 5/5] Running CorrelatedLaggardStrategy (Thematic Sector Arbitrage)...")
+    try:
+        lagger_res = engine.run(CorrelatedLaggardStrategy)
+        if lagger_res:
+            results["Correlated Lagger"] = lagger_res
+            print(f"Completed! Return: {lagger_res['net_return_pct']:+.2f}% | Trades: {lagger_res['total_trades']}")
+    except Exception as e:
+        print(f"Error backtesting Correlated Lagger Strategy: {e}")
+
     # Output Side-by-Side Comparison
     if not results:
         print("\n[Error] No backtest results generated.")
         return
         
-    print("\n" + "=" * 115)
+    print("\n" + "=" * 135)
     print("                                      STRATEGY SIMULATION COMPARISON")
-    print("=" * 115)
-    print(f"{'Strategy Metric':<30} | {'Momentum':<18} | {'Machine Learning':<18} | {'Vol Breakout':<18} | {'Pairs Trading':<18}")
-    print("-" * 115)
+    print("=" * 135)
+    print(f"{'Strategy Metric':<30} | {'Momentum':<18} | {'Machine Learning':<18} | {'Vol Breakout':<18} | {'Pairs Trading':<18} | {'Correlated Lagger':<18}")
+    print("-" * 135)
     
     metrics_to_print = [
         ("Initial Capital", lambda r: f"${r['initial_capital']:,.2f}"),
@@ -126,16 +137,16 @@ def main():
     
     for label, formatter in metrics_to_print:
         vals = []
-        for strat in ["Momentum", "Machine Learning", "Vol Breakout", "Pairs Trading"]:
+        for strat in ["Momentum", "Machine Learning", "Vol Breakout", "Pairs Trading", "Correlated Lagger"]:
             val = formatter(results[strat]) if strat in results else "N/A"
             vals.append(val)
-        print(f"{label:<30} | {vals[0]:<18} | {vals[1]:<18} | {vals[2]:<18} | {vals[3]:<18}")
+        print(f"{label:<30} | {vals[0]:<18} | {vals[1]:<18} | {vals[2]:<18} | {vals[3]:<18} | {vals[4]:<18}")
         
-    print("=" * 115)
+    print("=" * 135)
     
     # Executive Recommendations
     print("\n--- Executive Summary & Recommendations ---")
-    active_strats = [s for s in ["Momentum", "Machine Learning", "Vol Breakout", "Pairs Trading"] if s in results]
+    active_strats = [s for s in ["Momentum", "Machine Learning", "Vol Breakout", "Pairs Trading", "Correlated Lagger"] if s in results]
     if len(active_strats) > 1:
         best_strat = max(active_strats, key=lambda s: results[s]["net_return_pct"])
         best_return = results[best_strat]["net_return_pct"]
@@ -149,7 +160,8 @@ def main():
         best_dd_strat = max(active_strats, key=lambda s: results[s]["max_drawdown_pct"]) # max drawdown is negative, so max value is closest to 0
         print(f"🛡️ The **{best_dd_strat} Strategy** demonstrated the strongest capital preservation, limiting drawdown to **{results[best_dd_strat]['max_drawdown_pct']:.2f}%**.")
         
-    print("=" * 115)
+    print("=" * 135)
+
 
 if __name__ == "__main__":
     main()

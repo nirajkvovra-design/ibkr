@@ -1,5 +1,7 @@
 # Interactive Brokers Automated Trading System
 
+[![Sponsor via GitHub](https://img.shields.io/badge/Sponsor%20via-GitHub-ea4aaa?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/nirajkvovra-design) [![Sponsor via PayPal](https://img.shields.io/badge/Sponsor%20via-PayPal-blue?style=for-the-badge&logo=paypal)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=nirajkvovra@gmail.com&item_name=Interactive+Brokers+Automated+Trading+System+Sponsorship&currency_code=USD) [![Sponsor via Ko-fi](https://img.shields.io/badge/Sponsor%20via-Kofi-orange?style=for-the-badge&logo=ko-fi)](https://ko-fi.com/nirajkvovra) [![Sponsor via Patreon](https://img.shields.io/badge/Sponsor%20via-Patreon-red?style=for-the-badge&logo=patreon)](https://www.patreon.com/nirajkvovra)
+
 A complete Python-based automated trading system for Interactive Brokers that runs automatically during trading hours.
 
 ## Features

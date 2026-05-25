@@ -5,15 +5,17 @@ import pandas as pd
 from pandas import isna as pd_isna
 from data_fetcher import DataFetcher
 from news_sentiment import NewsSentiment
+from core.models import OrderRequest, OrderSide, OrderType
 
 logger = get_logger(__name__)
 
 class TradingStrategy:
     """Base trading strategy class"""
     
-    def __init__(self, ib_connection, risk_manager=None):
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
         self.ib_connection = ib_connection
         self.risk_manager = risk_manager
+        self.order_manager = order_manager
         self.daily_trades = 0
         self.daily_profit_loss = 0
         self.active_positions = {}
@@ -53,8 +55,8 @@ class TradingStrategy:
 class MomentumStrategy(TradingStrategy):
     """Momentum-based trading strategy with real data and technical indicators"""
     
-    def __init__(self, ib_connection, risk_manager=None):
-        super().__init__(ib_connection, risk_manager)
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
+        super().__init__(ib_connection, risk_manager, order_manager)
         self.price_history = {}
         self.last_signals = {}
         self.data_cache = {}
@@ -264,24 +266,49 @@ class MomentumStrategy(TradingStrategy):
                     if limit_price is None:
                         logger.warning(f"Skipping {symbol}: unable to calculate SELL limit price")
                         continue
-                    order_id = self.ib_connection.place_order(
-                        symbol,
-                        "SELL",
-                        qty,
-                        order_type="LMT",
+
+                    # Tax Safety check before selling
+                    if self.risk_manager and not self.risk_manager.check_tax_safety_gate(symbol, qty, limit_price):
+                        logger.warning(f"SELL signal for {symbol} blocked by tax safety gates")
+                        continue
+
+                    # Build OrderRequest; prefer OrderManager but fall back to legacy IB client
+                    req = OrderRequest(
+                        symbol=symbol,
+                        action=OrderSide.SELL,
+                        quantity=int(qty),
+                        order_type=OrderType.LMT,
                         limit_price=limit_price,
-                        metadata={
-                            "entry_price": positions[symbol].get("avg_cost"),
-                        },
+                        metadata={"entry_price": positions[symbol].get("avg_cost")},
                     )
-                    
+                    if getattr(self, "order_manager", None):
+                        # Record submission timestamp
+                        if self.risk_manager and hasattr(self.risk_manager, "metrics_collector"):
+                            self.risk_manager.metrics_collector.record_order_submitted(self.wrapper.next_order_id if hasattr(self, "wrapper") and hasattr(self.wrapper, "next_order_id") else 9999) # fallback
+                        order_id = self.order_manager.submit_order_with_confirmation(req)
+                    else:
+                        order_id = self.ib_connection.place_order(symbol, "SELL", qty, order_type="LMT", limit_price=limit_price, metadata={"entry_price": positions[symbol].get("avg_cost")})
+
                     if order_id:
                         self.daily_trades += 1
                         logger.info(f"SELL signal executed for {symbol}")
+                        
+                        # Process matching tax lots and record OMS telemetry
+                        if self.risk_manager:
+                            self.risk_manager.tax_manager.process_sell(symbol, qty, limit_price, order_id=order_id)
+                            self.risk_manager.remove_position(symbol)
+                            if hasattr(self.risk_manager, "metrics_collector"):
+                                self.risk_manager.metrics_collector.record_order_filled(
+                                    order_id=order_id,
+                                    symbol=symbol,
+                                    action="SELL",
+                                    quantity=qty,
+                                    fill_price=limit_price,
+                                    target_price=positions[symbol].get("avg_cost") or limit_price
+                                )
+
                         if symbol in self.active_positions:
                             del self.active_positions[symbol]
-                        if self.risk_manager:
-                            self.risk_manager.remove_position(symbol)
                         try:
                             from daily_positions import record_close
                             record_close(symbol)
@@ -398,17 +425,21 @@ class MomentumStrategy(TradingStrategy):
                             logger.warning(f"Skipping {symbol}: unable to calculate BUY limit price")
                             continue
 
-                        order_id = self.ib_connection.place_order(
-                            symbol,
-                            "BUY",
-                            quantity,
-                            order_type="LMT",
+                        req = OrderRequest(
+                            symbol=symbol,
+                            action=OrderSide.BUY,
+                            quantity=int(quantity) if isinstance(quantity, (int, float)) else quantity,
+                            order_type=OrderType.LMT,
                             limit_price=limit_price,
-                            metadata={
-                                "entry_price": current_price,
-                            },
+                            metadata={"entry_price": current_price},
                         )
-                        
+                        if getattr(self, "order_manager", None):
+                            if self.risk_manager and hasattr(self.risk_manager, "metrics_collector"):
+                                self.risk_manager.metrics_collector.record_order_submitted(self.wrapper.next_order_id if hasattr(self, "wrapper") and hasattr(self.wrapper, "next_order_id") else 8888)
+                            order_id = self.order_manager.submit_order_with_confirmation(req)
+                        else:
+                            order_id = self.ib_connection.place_order(symbol, "BUY", quantity, order_type="LMT", limit_price=limit_price, metadata={"entry_price": current_price})
+
                         if order_id:
                             self.active_positions[symbol] = {
                                 'entry_price': current_price,
@@ -419,6 +450,16 @@ class MomentumStrategy(TradingStrategy):
                                 self.risk_manager.add_position(symbol, quantity, current_price)
                                 self.risk_manager.set_stop_loss(symbol, current_price, sl_percent)
                                 self.risk_manager.set_take_profit(symbol, current_price, tp_percent)
+                                self.risk_manager.tax_manager.add_buy_lot(symbol, quantity, limit_price, order_id=order_id)
+                                if hasattr(self.risk_manager, "metrics_collector"):
+                                    self.risk_manager.metrics_collector.record_order_filled(
+                                        order_id=order_id,
+                                        symbol=symbol,
+                                        action="BUY",
+                                        quantity=quantity,
+                                        fill_price=limit_price,
+                                        target_price=current_price
+                                    )
                             try:
                                 from daily_positions import record_open
                                 record_open(symbol, quantity, current_price, order_id)
@@ -470,12 +511,16 @@ class GridTradingStrategy(TradingStrategy):
         for price_level, signal in signals.items():
             try:
                 if signal == 'BUY':
-                    order_id = self.ib_connection.place_order(
-                        self.symbol, "BUY", 100, order_type="LMT", limit_price=price_level
-                    )
+                    req = OrderRequest(symbol=self.symbol, action=OrderSide.BUY, quantity=100, order_type=OrderType.LMT, limit_price=price_level)
+                    if getattr(self, "order_manager", None):
+                        order_id = self.order_manager.submit_order_with_confirmation(req)
+                    else:
+                        order_id = self.ib_connection.place_order(self.symbol, "BUY", 100, order_type="LMT", limit_price=price_level)
                     if order_id:
                         self.grid_orders[price_level] = order_id
-                        
+                        if self.risk_manager:
+                            self.risk_manager.tax_manager.add_buy_lot(self.symbol, 100, price_level, order_id=order_id)
+
             except Exception as e:
                 logger.error(f"Error in grid trading: {e}")
                 
@@ -500,8 +545,8 @@ class MachineLearningStrategy(MomentumStrategy):
     Inherits execution and data pipeline features from MomentumStrategy.
     """
 
-    def __init__(self, ib_connection, risk_manager=None):
-        super().__init__(ib_connection, risk_manager)
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
+        super().__init__(ib_connection, risk_manager, order_manager)
         logger.info(f"Initialized MachineLearningStrategy with model: {config.ML_MODEL_TYPE}")
 
     def generate_signals(self, symbols):
@@ -609,8 +654,8 @@ class PairsTradingStrategy(TradingStrategy):
     Monitors relative asset ratios and executes mean-reversion trades.
     """
 
-    def __init__(self, ib_connection, risk_manager=None):
-        super().__init__(ib_connection, risk_manager)
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
+        super().__init__(ib_connection, risk_manager, order_manager)
         logger.info(f"Initialized PairsTradingStrategy with pairs: {config.PAIRS_WATCHLIST}")
 
     def check_trading_conditions(self):
@@ -699,7 +744,7 @@ class PairsTradingStrategy(TradingStrategy):
     def execute_trades(self, signals):
         """Leverage the MomentumStrategy's robust sequential execute pass"""
         # Instantiate a helper momentum strategy to run the exact same execute pipeline
-        executor = MomentumStrategy(self.ib_connection, self.risk_manager)
+        executor = MomentumStrategy(self.ib_connection, self.risk_manager, self.order_manager)
         executor.daily_trades = self.daily_trades
         executor.execute_trades(signals)
         self.daily_trades = executor.daily_trades
@@ -711,8 +756,8 @@ class VolatilityBreakoutStrategy(MomentumStrategy):
     Identifies high-velocity breakouts from compressed pricing bands.
     """
 
-    def __init__(self, ib_connection, risk_manager=None):
-        super().__init__(ib_connection, risk_manager)
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
+        super().__init__(ib_connection, risk_manager, order_manager)
         logger.info(f"Initialized VolatilityBreakoutStrategy with lookback: {config.BREAKOUT_LOOKBACK}")
 
     def generate_signals(self, symbols):
@@ -784,8 +829,8 @@ class IPOBreakoutStrategy(MomentumStrategy):
     and utilizes a trailing 10-day EMA for support exits.
     """
 
-    def __init__(self, ib_connection, risk_manager=None):
-        super().__init__(ib_connection, risk_manager)
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
+        super().__init__(ib_connection, risk_manager, order_manager)
         logger.info(f"Initialized IPOBreakoutStrategy. Max listing age: {config.IPO_MAX_HISTORY_DAYS} days.")
 
     def generate_signals(self, symbols):
@@ -854,6 +899,95 @@ class IPOBreakoutStrategy(MomentumStrategy):
                 logger.error(f"Error checking IPO breakout for {symbol}: {e}")
                 signals[symbol] = 'HOLD'
 
+        return signals
+
+
+class CorrelatedLaggardStrategy(TradingStrategy):
+    """
+    Correlated Laggard Sector Catch-Up Strategy.
+    Detects breakouts in industry "Leader" stocks (e.g. NVDA) and trades
+    correlated "Laggard" stocks (e.g. AMD, SMCI) that have not yet caught up.
+    """
+
+    def __init__(self, ib_connection, risk_manager=None, order_manager=None):
+        super().__init__(ib_connection, risk_manager, order_manager)
+        logger.info("Initialized CorrelatedLaggardStrategy.")
+
+    def check_trading_conditions(self):
+        from utils import is_market_open
+        return is_market_open() and self.check_risk_limits()
+
+    def generate_signals(self, symbols):
+        signals = {symbol: 'HOLD' for symbol in symbols}
+        correlations = getattr(config, "THEMATIC_CORRELATIONS", {})
+        
+        for theme, config_data in correlations.items():
+            leader = config_data.get("leader")
+            laggards = config_data.get("laggards", [])
+            
+            if not leader or not laggards:
+                continue
+            
+            # Verify leader is active in symbols
+            if leader not in symbols:
+                continue
+                
+            try:
+                # Fetch leader stock data
+                leader_data = self.data_fetcher.get_stock_data(leader)
+                if leader_data is None or len(leader_data) < 2:
+                    continue
+                
+                latest_leader = leader_data.iloc[-1]
+                prev_leader = leader_data.iloc[-2]
+                
+                leader_1d_change = (latest_leader['Close'] - prev_leader['Close']) / prev_leader['Close']
+                leader_volume_ratio = latest_leader.get('Volume_Ratio', 1.0)
+                
+                # Condition for a Leader Breakout:
+                # 1. Daily return exceeds trigger threshold (e.g. 1.5%)
+                # 2. Volume ratio is high (e.g. >= 1.2x average)
+                leader_breakout = (
+                    leader_1d_change >= getattr(config, "LAGGER_LEADER_MIN_RETURN", 0.015) and
+                    leader_volume_ratio >= getattr(config, "LAGGER_LEADER_MIN_VOLUME_RATIO", 1.2)
+                )
+                
+                if leader_breakout:
+                    logger.info(f"[Laggard Strategy] Leader Breakout detected for {leader} (+{leader_1d_change*100:.2f}%, Vol Ratio: {leader_volume_ratio:.2f})")
+                    
+                    for laggard in laggards:
+                        if laggard not in symbols:
+                            continue
+                            
+                        # If we already have a position or active order, skip
+                        if self.ib_connection.get_positions().get(laggard) or self.ib_connection.has_active_order(laggard, "BUY"):
+
+                            continue
+                            
+                        laggard_data = self.data_fetcher.get_stock_data(laggard)
+                        if laggard_data is None or len(laggard_data) < 2:
+                            continue
+                            
+                        latest_laggard = laggard_data.iloc[-1]
+                        prev_laggard = laggard_data.iloc[-2]
+                        
+                        laggard_1d_change = (latest_laggard['Close'] - prev_laggard['Close']) / prev_laggard['Close']
+                        laggard_rsi = latest_laggard.get('RSI', 50.0)
+                        
+                        # Conditions for buying the Laggard:
+                        # 1. The laggard has not caught up yet (e.g., return is less than 30% of leader's return)
+                        # 2. The laggard is not already overbought (e.g., RSI < 60)
+                        max_catchup_ratio = getattr(config, "LAGGER_MAX_CATCHUP_RATIO", 0.3)
+                        is_lagging = laggard_1d_change < (leader_1d_change * max_catchup_ratio)
+                        not_overbought = laggard_rsi < getattr(config, "LAGGER_MAX_RSI", 60.0)
+                        
+                        if is_lagging and not_overbought:
+                            logger.info(f"[Laggard Strategy] BUY SIGNAL for laggard {laggard} (1D Return: {laggard_1d_change*100:.2f}%) lagging leader {leader} (1D Return: {leader_1d_change*100:.2f}%)")
+                            signals[laggard] = 'BUY'
+                            
+            except Exception as e:
+                logger.error(f"Error executing CorrelatedLaggardStrategy for theme {theme}: {e}")
+                
         return signals
 
 
