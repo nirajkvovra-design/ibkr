@@ -81,7 +81,14 @@ class TradingEngine:
         # Capture starting positions for today's session
         self.ib_connection.refresh_account_data()
         positions = self.ib_connection.get_positions()
-        starting = {sym.upper(): info.get("quantity", 0) for sym, info in positions.items()}
+        starting = {}
+        for sym, info in positions.items():
+            if hasattr(info, "quantity"):
+                starting[sym.upper()] = getattr(info, "quantity", 0)
+            elif isinstance(info, dict):
+                starting[sym.upper()] = info.get("quantity", 0)
+            else:
+                starting[sym.upper()] = 0
         daily_positions.reset_if_new_day(starting)
 
         # Initialize strategy based on configuration
@@ -481,8 +488,16 @@ class TradingEngine:
                     logger.warning(f"Skipping exit check for {symbol}: current price unavailable")
                     continue
 
-                avg_cost = positions[symbol].get('avg_cost')
-                quantity = positions[symbol].get('quantity', 0)
+                pos_info = positions[symbol]
+                if hasattr(pos_info, "avg_cost"):
+                    avg_cost = getattr(pos_info, "avg_cost", 0.0)
+                    quantity = getattr(pos_info, "quantity", 0)
+                elif isinstance(pos_info, dict):
+                    avg_cost = pos_info.get('avg_cost')
+                    quantity = pos_info.get('quantity', 0)
+                else:
+                    avg_cost = 0.0
+                    quantity = 0
                 
                 # Sync quantity/cost to RiskManager on each cycle
                 if avg_cost and quantity > 0:
@@ -560,7 +575,17 @@ class TradingEngine:
                 if symbol not in positions:
                     daily_positions.record_close(symbol)
                     continue
-                qty = positions[symbol]["quantity"]
+                pos_info = positions[symbol]
+                if hasattr(pos_info, "quantity"):
+                    qty = getattr(pos_info, "quantity", 0)
+                    avg_cost = getattr(pos_info, "avg_cost", 0.0)
+                elif isinstance(pos_info, dict):
+                    qty = pos_info.get("quantity", 0)
+                    avg_cost = pos_info.get("avg_cost", 0.0)
+                else:
+                    qty = 0
+                    avg_cost = 0.0
+
                 if qty <= 0:
                     daily_positions.record_close(symbol)
                     continue
@@ -577,11 +602,11 @@ class TradingEngine:
                     logger.warning(f"EOD close for {symbol} blocked by tax safety gates")
                     continue
 
-                req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(qty), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": positions[symbol].get("avg_cost")})
+                req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(qty), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": avg_cost})
                 if getattr(self, "order_manager", None):
                     order_id = self.order_manager.submit_order_with_confirmation(req)
                 else:
-                    order_id = self.ib_connection.place_order(symbol, "SELL", qty, order_type="LMT", limit_price=limit_price, metadata={"entry_price": positions[symbol].get("avg_cost")})
+                    order_id = self.ib_connection.place_order(symbol, "SELL", qty, order_type="LMT", limit_price=limit_price, metadata={"entry_price": avg_cost})
                 if order_id:
                     self.risk_manager.tax_manager.process_sell(symbol, qty, limit_price, order_id=order_id)
                     closed.append(symbol)
@@ -655,7 +680,16 @@ class TradingEngine:
             positions = self.ib_connection.get_positions()
             
             for symbol, pos_info in positions.items():
-                quantity = pos_info['quantity']
+                if hasattr(pos_info, "quantity"):
+                    quantity = getattr(pos_info, "quantity", 0)
+                    avg_cost = getattr(pos_info, "avg_cost", 0.0)
+                elif isinstance(pos_info, dict):
+                    quantity = pos_info.get('quantity', 0)
+                    avg_cost = pos_info.get('avg_cost', 0.0)
+                else:
+                    quantity = 0
+                    avg_cost = 0.0
+
                 if quantity <= 0:
                     continue
                 limit_price = self.data_fetcher.get_limit_price(symbol, "SELL")
@@ -668,11 +702,11 @@ class TradingEngine:
                     logger.warning(f"Close all for {symbol} blocked by tax safety gates")
                     continue
 
-                req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(quantity), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": pos_info.get("avg_cost")})
+                req = OrderRequest(symbol=symbol, action=OrderSide.SELL, quantity=int(quantity), order_type=OrderType.LMT, limit_price=limit_price, metadata={"entry_price": avg_cost})
                 if getattr(self, "order_manager", None):
                     order_id = self.order_manager.submit_order_with_confirmation(req)
                 else:
-                    order_id = self.ib_connection.place_order(symbol, "SELL", quantity, order_type="LMT", limit_price=limit_price, metadata={"entry_price": pos_info.get("avg_cost")})
+                    order_id = self.ib_connection.place_order(symbol, "SELL", quantity, order_type="LMT", limit_price=limit_price, metadata={"entry_price": avg_cost})
                 if order_id:
                     self.risk_manager.tax_manager.process_sell(symbol, quantity, limit_price, order_id=order_id)
                     logger.info(f"Close order submitted for position: {symbol}")
