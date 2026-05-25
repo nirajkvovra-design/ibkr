@@ -128,7 +128,7 @@ class EventEngine:
         
         self._active = True
         self._loop = asyncio.get_event_loop()
-        self._task = asyncio.create_task(self._run())
+        self._task = self._loop.create_task(self._run())
         logger.info("EventEngine started.")
 
     async def stop(self) -> None:
