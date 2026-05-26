@@ -172,9 +172,11 @@ ENABLE_MARKET_RESEARCH = _bool_env("ENABLE_MARKET_RESEARCH", True)
 RESEARCH_LOG_FILE = os.getenv("RESEARCH_LOG_FILE", "trading_research.jsonl")
 CLOSE_TODAYS_POSITIONS_AT_EOD = _bool_env("CLOSE_TODAYS_POSITIONS_AT_EOD", True)
 DAILY_POSITIONS_FILE = os.getenv("DAILY_POSITIONS_FILE", "daily_positions.json")
+STATE_CACHE_FILE = os.getenv("STATE_CACHE_FILE", ".state_cache.json")
 EOD_CLOSE_MINUTES_BEFORE_END = _int_env("EOD_CLOSE_MINUTES_BEFORE_END", 5)
 # Faster paper learning: more signals/trades while still using limits & journal (disable via .env)
 PAPER_LEARNING_MODE = _bool_env("PAPER_LEARNING_MODE", True)
+
 
 # Strategy Selection and Machine Learning Configs
 SELECTED_STRATEGY = os.getenv("SELECTED_STRATEGY", "MOMENTUM")  # MOMENTUM or ML

@@ -37,7 +37,8 @@ class RiskManager:
 
         # Persistent State Manager
         from core.state_manager import StateManager
-        self.state_manager = StateManager()
+        cache_file = getattr(config, "STATE_CACHE_FILE", ".state_cache.json")
+        self.state_manager = StateManager(cache_file)
         self.rehydrate_state()
 
         # Macro & Geopolitical Intelligence Engine
