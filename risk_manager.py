@@ -51,6 +51,20 @@ class RiskManager:
             logger.error("[Risk Sentry] Trade blocked: Programmatic Kill Switch is active!")
             return False
 
+        # Check Blocker 1: Market data freshness check
+        if hasattr(self.ib_connection, "wrapper") and self.ib_connection.wrapper:
+            last_hb = getattr(self.ib_connection.wrapper, "last_heartbeat", None)
+            if last_hb is not None and isinstance(last_hb, (int, float)) and not isinstance(last_hb, bool):
+                import time
+                elapsed = time.time() - last_hb
+                from utils import is_market_open
+                freshness_limit = getattr(config, "MARKET_DATA_FRESHNESS_LIMIT", 60)
+                if elapsed > freshness_limit and is_market_open():
+                    logger.critical(f"[Risk Sentry] Trade blocked: Market data is STALE! Time since last tick: {elapsed:.1f}s (Limit: {freshness_limit}s). Engaging programmatic Kill Switch.")
+                    send_alert(f"Market data stale: {elapsed:.1f}s since last tick. Engaging programmatic Kill Switch.", level="ERROR")
+                    self.engage_kill_switch()
+                    return False
+
         # Block immediately if symbol is in trade cooldown
         if self.is_in_cooldown(symbol):
             logger.warning("[Risk Sentry] Trade blocked: %s is currently in cooldown state.", symbol.upper())

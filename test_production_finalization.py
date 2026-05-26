@@ -139,3 +139,92 @@ class TestProductionFinalization(unittest.TestCase):
         self.assertEqual(config.IB_ACCOUNT, "DU1234567")
         self.assertFalse(config.PAPER_TRADING)
         self.assertTrue(config.ENABLE_LIVE_TRADING)
+
+    @patch("asyncio.sleep")
+    @patch("trading_engine.setup_logging")
+    @patch("trading_engine.InteractiveBrokersConnection")
+    @patch("trading_engine.OrderManager")
+    @patch("trading_engine.RiskManager")
+    def test_watchdog_detects_stale_market_data(
+        self, mock_risk_cls, mock_order_cls, mock_conn_cls, mock_setup_logging, mock_sleep
+    ):
+        """Verify watchdog detects stale market data and engages programmatic Kill Switch."""
+        # Setup mocks
+        mock_conn = mock_conn_cls.return_value
+        mock_conn.connected = True
+        
+        # Inject old heartbeat (100 seconds ago) to simulate stale data
+        import time
+        mock_conn.wrapper = MagicMock()
+        mock_conn.wrapper.last_heartbeat = time.time() - 100.0
+        
+        mock_risk = mock_risk_cls.return_value
+        mock_risk.kill_switch_active = False
+        mock_order = mock_order_cls.return_value
+        
+        engine = TradingEngine()
+        engine.ib_connection = mock_conn
+        engine.risk_manager = mock_risk
+        engine.order_manager = mock_order
+        engine.running = True
+        
+        # Mock sleep to run only one watchdog loop iteration
+        async def mock_sleep_impl(seconds):
+            engine.running = False
+            
+        mock_sleep.side_effect = mock_sleep_impl
+        
+        # Force is_market_open to return True
+        with patch("utils.is_market_open", return_value=True):
+            asyncio.run(engine.monitor_broker_connection())
+            
+        # Watchdog must engage Kill Switch and cancel stale orders
+        mock_risk.engage_kill_switch.assert_called_once()
+        mock_order.cancel_stale_orders.assert_called_once()
+
+    @patch("asyncio.sleep")
+    @patch("trading_engine.setup_logging")
+    @patch("trading_engine.InteractiveBrokersConnection")
+    @patch("trading_engine.OrderManager")
+    @patch("trading_engine.RiskManager")
+    def test_watchdog_detects_position_drift_mismatch(
+        self, mock_risk_cls, mock_order_cls, mock_conn_cls, mock_setup_logging, mock_sleep
+    ):
+        """Verify watchdog detects position mismatch (manual trade drift) and engages Kill Switch."""
+        # Setup mocks
+        mock_conn = mock_conn_cls.return_value
+        mock_conn.connected = True
+        
+        # Fresh heartbeat (0 seconds ago) to avoid stale data block
+        import time
+        mock_conn.wrapper = MagicMock()
+        mock_conn.wrapper.last_heartbeat = time.time()
+        
+        # Inject a position mismatch: local expects 0 positions, live has AAPL x 10
+        mock_conn.get_positions.return_value = {
+            "AAPL": MagicMock(quantity=10, avg_cost=150.00)
+        }
+        
+        mock_risk = mock_risk_cls.return_value
+        mock_risk.open_positions = {}  # Local expects empty positions
+        mock_risk.kill_switch_active = False
+        
+        mock_order = mock_order_cls.return_value
+        
+        engine = TradingEngine()
+        engine.ib_connection = mock_conn
+        engine.risk_manager = mock_risk
+        engine.order_manager = mock_order
+        engine.running = True
+        
+        # Mock sleep to run only one watchdog loop iteration
+        async def mock_sleep_impl(seconds):
+            engine.running = False
+            
+        mock_sleep.side_effect = mock_sleep_impl
+        
+        # Run watchdog loop iteration
+        asyncio.run(engine.monitor_broker_connection())
+        
+        # Watchdog must engage Kill Switch due to untracked positions mismatch
+        mock_risk.engage_kill_switch.assert_called_once()

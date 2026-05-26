@@ -148,6 +148,7 @@ BLOCK_ON_NEWS_FAILURE = _bool_env("BLOCK_ON_NEWS_FAILURE", True)
 RECONNECT_ATTEMPTS = 5
 RECONNECT_DELAY = 5  # seconds
 STALE_ORDER_TIMEOUT = _int_env("STALE_ORDER_TIMEOUT", 120)  # seconds before stale working orders are cancelled
+MARKET_DATA_FRESHNESS_LIMIT = _int_env("MARKET_DATA_FRESHNESS_LIMIT", 60)  # seconds without market data ticks before feed is stale
 ORDER_CONFIRMATION_TIMEOUT = _int_env("ORDER_CONFIRMATION_TIMEOUT", 60)  # seconds to wait for a fill before retry
 ORDER_RETRY_LIMIT = _int_env("ORDER_RETRY_LIMIT", 1)
 ORDER_RETRY_FALLBACK_TO_MARKET = _bool_env("ORDER_RETRY_FALLBACK_TO_MARKET", False)

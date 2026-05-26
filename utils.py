@@ -66,16 +66,21 @@ def send_alert(message, level="ERROR", details=None):
         logger.warning(f"Failed to write alert file: {exc}")
 
     if config.ALERT_WEBHOOK_ENABLED and config.ALERT_WEBHOOK_URL:
-        try:
-            payload = json.dumps(alert).encode("utf-8")
-            request = urllib.request.Request(
-                config.ALERT_WEBHOOK_URL,
-                data=payload,
-                headers={"Content-Type": "application/json"},
-            )
-            urllib.request.urlopen(request, timeout=config.ALERT_WEBHOOK_TIMEOUT)
-        except Exception as exc:
-            logger.warning(f"Alert webhook failed: {exc}")
+        import threading
+        def post_webhook():
+            try:
+                payload = json.dumps(alert).encode("utf-8")
+                request = urllib.request.Request(
+                    config.ALERT_WEBHOOK_URL,
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                urllib.request.urlopen(request, timeout=config.ALERT_WEBHOOK_TIMEOUT)
+            except Exception as exc:
+                logger.warning(f"Alert webhook failed: {exc}. Telemetry remains cached locally.")
+        
+        # Dispatch alert request asynchronously on a background daemon thread
+        threading.Thread(target=post_webhook, daemon=True).start()
 
 
 def update_health_status(status):

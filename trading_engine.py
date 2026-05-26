@@ -243,16 +243,64 @@ class TradingEngine:
             schedule.run_pending()
             time.sleep(1)
 
+    def audit_positions(self) -> tuple[bool, str]:
+        """
+        Cross-reference local RiskManager positions with actual TWS positions.
+        Returns (is_in_sync, message).
+        """
+        try:
+            live_positions = self.ib_connection.get_positions()
+            local_positions = self.risk_manager.open_positions
+            
+            # Compare sets of keys (case-insensitive keys)
+            live_keys = {k.upper() for k, v in live_positions.items() if getattr(v, "quantity", 0) != 0}
+            local_keys = {k.upper() for k, v in local_positions.items() if v.get("quantity", 0) != 0}
+            
+            untracked = live_keys - local_keys
+            if untracked:
+                return False, f"Untracked live positions detected in TWS: {untracked}"
+                
+            missing = local_keys - live_keys
+            if missing:
+                return False, f"Missing expected positions in TWS: {missing}"
+                
+            for sym in live_keys:
+                live_info = live_positions.get(sym)
+                local_info = local_positions.get(sym)
+                
+                live_qty = getattr(live_info, "quantity", 0) if not isinstance(live_info, dict) else live_info.get("quantity", 0)
+                local_qty = local_info.get("quantity", 0)
+                
+                if live_qty != local_qty:
+                    return False, f"Position quantity mismatch for {sym}: Expected {local_qty}, found {live_qty} in TWS."
+                    
+            return True, "Positions in perfect synchronization."
+        except Exception as e:
+            return False, f"Position audit failed: {e}"
+
     async def monitor_broker_connection(self):
-        """Asynchronous Watchdog loop that polls connection status and auto-heals outages."""
+        """Asynchronous Watchdog loop that polls connection status, stale data, and external position drift."""
         logger.info("[Watchdog Sentry] Connection Sentry started.")
         while self.running:
             try:
                 await asyncio.sleep(10)
                 
                 connected = self.ib_connection.connected
-                if not connected:
-                    logger.critical("[Watchdog Sentry] Broker disconnection detected! Engaging emergency safeties...")
+                
+                # Check Blocker 1: Market Data Freshness Sentry
+                stale_data = False
+                if connected and hasattr(self.ib_connection, "wrapper") and self.ib_connection.wrapper:
+                    last_hb = getattr(self.ib_connection.wrapper, "last_heartbeat", None)
+                    if last_hb is not None and isinstance(last_hb, (int, float)) and not isinstance(last_hb, bool):
+                        elapsed = time.time() - last_hb
+                        from utils import is_market_open
+                        freshness_limit = getattr(config, "MARKET_DATA_FRESHNESS_LIMIT", 60)
+                        if elapsed > freshness_limit and is_market_open():
+                            logger.critical(f"[Watchdog Sentry] Market data STALE detected! Time since last tick: {elapsed:.1f}s (Limit: {freshness_limit}s). Engaging emergency safeties...")
+                            stale_data = True
+                
+                if not connected or stale_data:
+                    logger.critical("[Watchdog Sentry] Broker disconnection or stale data detected! Engaging emergency safeties...")
                     
                     # 1. Trigger the emergency Kill Switch in RiskManager
                     self.risk_manager.engage_kill_switch()
@@ -264,38 +312,51 @@ class TradingEngine:
                     except Exception as err:
                         logger.error(f"[Watchdog Sentry] Error cancelling stale orders: {err}")
                         
-                    # 3. Attempt reconnection loop
-                    logger.info("[Watchdog Sentry] Starting reconnection attempt...")
-                    reconnect_success = False
-                    
-                    # Try to reconnect a few times
-                    for attempt in range(1, 4):
-                        logger.info(f"[Watchdog Sentry] Reconnection attempt {attempt}/3...")
-                        try:
-                            # Run in executor to prevent blocking the async event loop if socket creation blocks
-                            loop = asyncio.get_running_loop()
-                            reconnect_success = await loop.run_in_executor(None, self.ib_connection.connect)
-                            if reconnect_success:
-                                logger.info("[Watchdog Sentry] Reconnection successful!")
-                                break
-                        except Exception as conn_err:
-                            logger.error(f"[Watchdog Sentry] Connection attempt {attempt} raised exception: {conn_err}")
-                        await asyncio.sleep(5)
+                    # If socket disconnected, attempt reconnection loop
+                    if not connected:
+                        logger.info("[Watchdog Sentry] Starting reconnection attempt...")
+                        reconnect_success = False
                         
-                    if reconnect_success:
-                        # 4. Synchronize positions and safely deactivate Kill Switch
-                        try:
-                            self.ib_connection.refresh_account_data()
-                            positions = self.ib_connection.get_positions()
-                            daily_positions.sync_from_ib_positions(positions)
-                            logger.info("[Watchdog Sentry] Local positions and state successfully synchronized.")
-                        except Exception as sync_err:
-                            logger.error(f"[Watchdog Sentry] Error synchronizing state after reconnect: {sync_err}")
+                        # Try to reconnect a few times
+                        for attempt in range(1, 4):
+                            logger.info(f"[Watchdog Sentry] Reconnection attempt {attempt}/3...")
+                            try:
+                                # Run in executor to prevent blocking the async event loop if socket creation blocks
+                                loop = asyncio.get_running_loop()
+                                reconnect_success = await loop.run_in_executor(None, self.ib_connection.connect)
+                                if reconnect_success:
+                                    logger.info("[Watchdog Sentry] Reconnection successful!")
+                                    break
+                            except Exception as conn_err:
+                                logger.error(f"[Watchdog Sentry] Connection attempt {attempt} raised exception: {conn_err}")
+                            await asyncio.sleep(5)
                             
-                        # Safely deactivate the Kill Switch
-                        self.risk_manager.disengage_kill_switch()
+                        if reconnect_success:
+                            # 4. Synchronize positions and safely deactivate Kill Switch
+                            try:
+                                self.ib_connection.refresh_account_data()
+                                positions = self.ib_connection.get_positions()
+                                daily_positions.sync_from_ib_positions(positions)
+                                logger.info("[Watchdog Sentry] Local positions and state successfully synchronized.")
+                            except Exception as sync_err:
+                                logger.error(f"[Watchdog Sentry] Error synchronizing state after reconnect: {sync_err}")
+                                
+                            # Safely deactivate the Kill Switch
+                            self.risk_manager.disengage_kill_switch()
+                        else:
+                            logger.critical("[Watchdog Sentry] Reconnection attempts exhausted. System remains in LOCKDOWN mode.")
                     else:
-                        logger.critical("[Watchdog Sentry] Reconnection attempts exhausted. System remains in LOCKDOWN mode.")
+                        logger.warning("[Watchdog Sentry] Socket remains open but data flow stalled. Webhook alert issued.")
+                        send_alert("Market data feed freeze detected while socket connected. Core execution paused.", level="WARNING")
+                
+                # Check Blocker 2: Manual Trade Interference Sentry (Only check if connection is normal)
+                elif connected and not stale_data and not self.risk_manager.kill_switch_active:
+                    is_in_sync, audit_msg = self.audit_positions()
+                    if not is_in_sync:
+                        logger.critical(f"[Watchdog Sentry] MISMATCH CRITICAL WARNING: {audit_msg} Engaging programmatic Kill Switch.")
+                        send_alert(f"MISMATCH CRITICAL WARNING: {audit_msg} Engaging programmatic Kill Switch.", level="ERROR")
+                        self.risk_manager.engage_kill_switch()
+                        
             except Exception as e:
                 logger.error(f"[Watchdog Sentry] Error in watchdog monitoring loop: {e}")
             

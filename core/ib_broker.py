@@ -160,6 +160,7 @@ class IBWrapper(EWrapper):
         size: float,
     ) -> None:
         """EWrapper market depth callback for Level 2 rows."""
+        self.last_heartbeat = time.time()  # Record heartbeat on L2 depth stream tick
         symbol = self.depth_symbols.get(reqId)
         if not symbol:
             return
@@ -176,10 +177,10 @@ class IBWrapper(EWrapper):
             self.event_engine.put(Event(EVENT_TICK, data=book.get_snapshot()))
 
     def tickPrice(self, reqId: int, tickType: int, price: float, attrib) -> None:
+        self.last_heartbeat = time.time()  # Record heartbeat on standard price tick callback
         from ibapi.ticktype import TickType
-        if tickType == TickType.LAST:
+        if price > 0:
             self.market_data[reqId] = price
-            self.last_heartbeat = time.time()
 
     def connectionClosed(self) -> None:
         super().connectionClosed()
