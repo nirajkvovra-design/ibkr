@@ -105,6 +105,13 @@ class TestFuturesIntegration(unittest.TestCase):
         mock_conn.get_account_value.return_value = 100000.0
         
         risk = RiskManager(mock_conn)
+        # Mock macro intelligence report to avoid external news flakiness
+        risk.macro_engine.get_macro_intelligence_report = MagicMock(return_value={
+            "regime": "LOW_VOL_TREND",
+            "stress_score": 0.10,
+            "geopolitical_multiplier": 1.0,
+            "event_blackout": {"is_blocked": False}
+        })
         risk.max_position_size = 50000.0  # Max limit
         config.DYNAMIC_RISK_SCALING = False
         

@@ -27,7 +27,15 @@ class SafetyGate:
     Gatekeeper managing staged deployment progression and risk validation metrics.
     """
 
-    def __init__(self, current_stage: TradingStage = TradingStage.SHADOW):
+    def __init__(self, current_stage: Optional[TradingStage] = None):
+        import config
+        if current_stage is None:
+            stage_str = getattr(config, "TRADING_STAGE", "SHADOW").upper()
+            try:
+                current_stage = TradingStage[stage_str]
+            except KeyError:
+                logger.error("[Safety Gate] Invalid TRADING_STAGE '%s' configured. Defaulting securely to SHADOW.", stage_str)
+                current_stage = TradingStage.SHADOW
         self.stage = current_stage
         logger.info("[Safety Gate] Initialized in stage: %s", self.stage.value)
 

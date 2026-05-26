@@ -141,6 +141,9 @@ PAPER_TRADING = _bool_env("PAPER_TRADING", True)
 # this is explicitly enabled in the environment after account setup is complete.
 ENABLE_LIVE_TRADING = _bool_env("ENABLE_LIVE_TRADING", False)
 
+# Staged progressive rollout stage (options: SHADOW, MICRO, LIMITED, FULL)
+TRADING_STAGE = os.getenv("TRADING_STAGE", "SHADOW").upper()
+
 # News and market-data safety
 NEWS_REFRESH_MINUTES = _int_env("NEWS_REFRESH_MINUTES", 15)
 REQUIRE_NEWS_CHECK = _bool_env("REQUIRE_NEWS_CHECK", True)

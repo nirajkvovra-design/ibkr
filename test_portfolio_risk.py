@@ -116,6 +116,13 @@ class TestPortfolioRiskEngine(unittest.TestCase):
         # Test dynamic sizing multiplier and VaR block inside RiskManager
         conn = DummyIBConnection(account_value=100000.0, cash=90000.0)
         rm = RiskManager(conn)
+        # Mock macro intelligence report to avoid external news flakiness
+        rm.macro_engine.get_macro_intelligence_report = MagicMock(return_value={
+            "regime": "LOW_VOL_TREND",
+            "stress_score": 0.10,
+            "geopolitical_multiplier": 1.0,
+            "event_blackout": {"is_blocked": False}
+        })
         
         # Override the mocked portfolio risk engine in the risk manager
         rm.portfolio_risk_engine = self.engine
