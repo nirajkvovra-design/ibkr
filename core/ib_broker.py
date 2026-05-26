@@ -132,6 +132,16 @@ class IBWrapper(EWrapper):
             metadata=self.pending_orders.get(orderId, {}).copy(),
         )
         self.order_status[orderId] = status_model
+        
+        # High-visibility transaction logging on stdout
+        import sys
+        if status == "Filled":
+            print(f"\033[92;1m[TRADE FILLED]\033[0m Executed order ID {orderId}: \033[92mFilled {filled} shares\033[0m at an average price of \033[93m${avgFillPrice:.2f}\033[0m")
+            sys.stdout.flush()
+        elif status == "Cancelled":
+            print(f"\033[90m[ORDER CANCELLED]\033[0m Order ID {orderId} has been cancelled.")
+            sys.stdout.flush()
+
         logger.info(
             "Order %s status=%s filled=%s remaining=%s avg_fill_price=%s",
             orderId,
@@ -407,6 +417,14 @@ class IBBrokerConnection(BrokerConnection):
             "request": request.model_dump(),
             "submitted_at": datetime.now(timezone.utc).isoformat(),
         }
+
+        # High-visibility transaction logging on stdout
+        import sys
+        action_str = request.action.value if hasattr(request.action, "value") else str(request.action)
+        action_color = "\033[92;1m" if "BUY" in action_str.upper() else "\033[91;1m"
+        limit_val = f"${float(request.limit_price):,.2f}" if request.limit_price is not None else "MARKET"
+        print(f"\033[95m[TRANSACTION SUBMITTED]\033[0m {action_color}{action_str}\033[0m {request.quantity} shares of \033[93;1m{request.symbol}\033[0m @ {limit_val} (ID: {order_id})")
+        sys.stdout.flush()
 
         logger.info(
             "Order submitted %s %s %s %s @ %s (order_id=%s)",

@@ -16,14 +16,23 @@ ENV/
 *.swp
 *.swo
 
-# Logs
+# Logs & Dynamic States
 trading_logs.txt
 scheduler_log.txt
 paper_trading_journal.jsonl
+paper_trading_journal_*.jsonl
 .trading_engine.pid
+.trading_engine_*.pid
 .trading_engine.restart
+.trading_engine_*.restart
 trading_research.jsonl
 daily_positions.json
+daily_positions_*.json
+trading_health.json
+trading_health_*.json
+.state_cache.json
+.state_cache_*.json
+tax_lots.json
 *.log
 
 # Environment variables
