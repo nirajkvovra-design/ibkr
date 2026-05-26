@@ -362,50 +362,53 @@ class TradingEngine:
             
     def _health_check(self):
         """Check IB connection health, update status, and alert on connection loss."""
-        connected = self.ib_connection.connected
-        if self._last_connection_status is None:
-            self._last_connection_status = connected
+        try:
+            connected = self.ib_connection.connected
+            if self._last_connection_status is None:
+                self._last_connection_status = connected
 
-        health_status = {
-            "connected": connected,
-            "account": config.IB_ACCOUNT,
-            "running": self.running,
-            "timestamp": datetime.now(self.tz).isoformat(timespec="seconds"),
-        }
-        update_health_status(health_status)
+            health_status = {
+                "connected": connected,
+                "account": config.IB_ACCOUNT,
+                "running": self.running,
+                "timestamp": datetime.now(self.tz).isoformat(timespec="seconds"),
+            }
+            update_health_status(health_status)
 
-        if connected != self._last_connection_status:
-            if not connected:
+            if connected != self._last_connection_status:
+                if not connected:
+                    send_alert(
+                        "Automated alert: IB connection lost",
+                        level="ERROR",
+                        details={"account": config.IB_ACCOUNT},
+                    )
+                else:
+                    send_alert(
+                        "IB connection restored",
+                        level="INFO",
+                        details={"account": config.IB_ACCOUNT},
+                    )
+                self._last_connection_status = connected
+
+            if self.running:
+                self.order_manager.cancel_stale_orders()
+
+            if self.running and not connected:
                 send_alert(
-                    "Automated alert: IB connection lost",
-                    level="ERROR",
+                    "Attempting to reconnect to Interactive Brokers after connection loss.",
+                    level="WARNING",
                     details={"account": config.IB_ACCOUNT},
                 )
-            else:
-                send_alert(
-                    "IB connection restored",
-                    level="INFO",
-                    details={"account": config.IB_ACCOUNT},
-                )
-            self._last_connection_status = connected
-
-        if self.running:
-            self.order_manager.cancel_stale_orders()
-
-        if self.running and not connected:
-            send_alert(
-                "Attempting to reconnect to Interactive Brokers after connection loss.",
-                level="WARNING",
-                details={"account": config.IB_ACCOUNT},
-            )
-            if not self.ib_connection.connect(retry=False):
-                send_alert(
-                    "Reconnection attempt failed.",
-                    level="ERROR",
-                    details={"account": config.IB_ACCOUNT},
-                )
-            else:
-                self._last_connection_status = self.ib_connection.connected
+                if not self.ib_connection.connect(retry=False):
+                    send_alert(
+                        "Reconnection attempt failed.",
+                        level="ERROR",
+                        details={"account": config.IB_ACCOUNT},
+                    )
+                else:
+                    self._last_connection_status = self.ib_connection.connected
+        except Exception as health_err:
+            logger.error("Error in health check scheduled task: %s", health_err)
 
     def _update_daily_pnl(self):
         """Update the running daily profit and loss from account value changes."""
@@ -740,9 +743,12 @@ class TradingEngine:
                 
     def _weekend_reset(self):
         """Weekend reset routine"""
-        logger.info("Weekend reset - preparing for next week")
-        self.strategy.reset_daily_stats()
-        self.risk_manager.reset_daily_stats()
+        try:
+            logger.info("Weekend reset - preparing for next week")
+            self.strategy.reset_daily_stats()
+            self.risk_manager.reset_daily_stats()
+        except Exception as e:
+            logger.error("Error in weekend reset scheduled task: %s", e)
         
     def _close_all_positions(self):
         """Close all open positions"""
@@ -833,16 +839,29 @@ class TradingEngine:
         
     def get_status(self):
         """Get current status"""
-        return {
-            'running': self.running,
-            'connected': self.ib_connection.connected,
-            'account': config.IB_ACCOUNT,
-            'account_value': self.ib_connection.get_account_value(),
-            'cash': self.ib_connection.get_cash(),
-            'account_snapshot': self.ib_connection.get_account_snapshot(),
-            'positions': len(self.ib_connection.get_positions()),
-            'daily_trades': self.strategy.daily_trades if self.strategy else 0
-        }
+        try:
+            is_connected = hasattr(self, 'ib_connection') and self.ib_connection and self.ib_connection.connected
+            return {
+                'running': self.running,
+                'connected': is_connected,
+                'account': config.IB_ACCOUNT,
+                'account_value': self.ib_connection.get_account_value() if is_connected else 0.0,
+                'cash': self.ib_connection.get_cash() if is_connected else 0.0,
+                'account_snapshot': self.ib_connection.get_account_snapshot() if is_connected else None,
+                'positions': len(self.ib_connection.get_positions()) if is_connected else 0,
+                'daily_trades': self.strategy.daily_trades if self.strategy else 0
+            }
+        except Exception as e:
+            logger.error("Error in get_status: %s", e)
+            return {
+                'running': self.running,
+                'connected': False,
+                'account': config.IB_ACCOUNT,
+                'account_value': 0.0,
+                'cash': 0.0,
+                'positions': 0,
+                'daily_trades': 0
+            }
 
 
 def main():
@@ -862,7 +881,10 @@ def main():
                 engine.graceful_shutdown_for_restart()
                 return
             time.sleep(config.RESTART_POLL_INTERVAL)
-            logger.debug(f"Status: {engine.get_status()}")
+            try:
+                logger.debug(f"Status: {engine.get_status()}")
+            except Exception as loop_err:
+                logger.error(f"Error in engine status log: {loop_err}")
             
     except KeyboardInterrupt:
         logger.info("Received interrupt signal")
