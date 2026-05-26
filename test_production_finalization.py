@@ -228,3 +228,53 @@ class TestProductionFinalization(unittest.TestCase):
         
         # Watchdog must engage Kill Switch due to untracked positions mismatch
         mock_risk.engage_kill_switch.assert_called_once()
+
+    def test_secrets_vault_keyring_retrieval(self):
+        """Verify SecretsVault retrieves passwords from OS Keyring."""
+        import sys
+        from unittest.mock import MagicMock
+        
+        # Backup original sys.modules keyring if it exists
+        orig_keyring = sys.modules.get("keyring")
+        
+        mock_keyring = MagicMock()
+        mock_keyring.get_password.return_value = "VAULT_VAL_123"
+        sys.modules["keyring"] = mock_keyring
+        
+        try:
+            from core.secrets_manager import SecretsVault
+            val = SecretsVault.get_secret("TEST_SECRET", "TEST_ENV_FALLBACK", "default")
+            self.assertEqual(val, "VAULT_VAL_123")
+            mock_keyring.get_password.assert_called_once_with("ibkr_trading_system", "TEST_SECRET")
+        finally:
+            # Restore keyring module state
+            if orig_keyring is not None:
+                sys.modules["keyring"] = orig_keyring
+            else:
+                sys.modules.pop("keyring", None)
+
+    def test_secrets_vault_env_fallback(self):
+        """Verify SecretsVault falls back to environment variables when keyring has no stored key."""
+        import sys
+        from unittest.mock import MagicMock
+        
+        # Backup original sys.modules keyring
+        orig_keyring = sys.modules.get("keyring")
+        
+        mock_keyring = MagicMock()
+        mock_keyring.get_password.return_value = None
+        sys.modules["keyring"] = mock_keyring
+        
+        try:
+            from core.secrets_manager import SecretsVault
+            os.environ["TEST_ENV_FALLBACK"] = "ENV_VAL_999"
+            val = SecretsVault.get_secret("TEST_SECRET_ABSENT", "TEST_ENV_FALLBACK", "default")
+            self.assertEqual(val, "ENV_VAL_999")
+        finally:
+            if "TEST_ENV_FALLBACK" in os.environ:
+                del os.environ["TEST_ENV_FALLBACK"]
+            # Restore keyring module state
+            if orig_keyring is not None:
+                sys.modules["keyring"] = orig_keyring
+            else:
+                sys.modules.pop("keyring", None)

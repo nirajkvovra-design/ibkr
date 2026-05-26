@@ -26,11 +26,13 @@ def _list_env(name, default):
     return [item.strip().upper() for item in value.split(",") if item.strip()]
 
 
+from core.secrets_manager import SecretsVault
+
 # Interactive Brokers Connection Settings
 IB_HOST = os.getenv("IB_HOST", "127.0.0.1")
 IB_PORT = _int_env("IB_PORT", 7497)  # 7497 for paper trading, 7496 for live trading
 IB_CLIENTID = _int_env("IB_CLIENTID", 1)
-IB_ACCOUNT = os.getenv("IB_ACCOUNT", "")  # Leave empty to use default, or specify account ID
+IB_ACCOUNT = SecretsVault.get_secret("IB_ACCOUNT", "IB_ACCOUNT", "")  # Rehydrate securely from Keyring/Env
 
 # Trading Hours (24-hour format, assumes US/Eastern timezone)
 TRADING_HOURS_START = 9  # 9:00 AM
@@ -128,7 +130,7 @@ LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR
 LOG_FILE = "trading_logs.txt"
 ALERT_FILE = os.getenv("ALERT_FILE", "trading_alerts.log")
 ALERT_WEBHOOK_ENABLED = _bool_env("ALERT_WEBHOOK_ENABLED", False)
-ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "")
+ALERT_WEBHOOK_URL = SecretsVault.get_secret("ALERT_WEBHOOK_URL", "ALERT_WEBHOOK_URL", "")  # Rehydrate securely from Keyring/Env
 ALERT_WEBHOOK_TIMEOUT = _int_env("ALERT_WEBHOOK_TIMEOUT", 5)
 HEALTH_STATUS_FILE = os.getenv("HEALTH_STATUS_FILE", "trading_health.json")
 
