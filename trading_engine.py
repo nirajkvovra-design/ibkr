@@ -410,7 +410,10 @@ class TradingEngine:
     def _update_daily_pnl(self):
         """Update the running daily profit and loss from account value changes."""
         account_snapshot = self.ib_connection.get_account_snapshot()
-        current_value = account_snapshot.get('net_liquidation')
+        if isinstance(account_snapshot, dict):
+            from core.models import AccountSnapshot
+            account_snapshot = AccountSnapshot(**account_snapshot)
+        current_value = account_snapshot.net_liquidation
         if current_value is None:
             return 0.0
 
@@ -434,18 +437,21 @@ class TradingEngine:
                 self.ib_connection.refresh_account_data()
                 positions = self.ib_connection.get_positions()
                 account_snapshot = self.ib_connection.get_account_snapshot()
+                if isinstance(account_snapshot, dict):
+                    from core.models import AccountSnapshot
+                    account_snapshot = AccountSnapshot(**account_snapshot)
                 
-                logger.info(f"Account Value: ${account_snapshot['net_liquidation']:,.2f}")
-                logger.info(f"Total Cash: ${account_snapshot['total_cash']:,.2f}")
-                logger.info(f"Available Funds: ${account_snapshot['available_funds']:,.2f}")
-                logger.info(f"Settled Cash: ${account_snapshot['settled_cash']:,.2f}")
-                logger.info(f"Funds for New Buys: ${account_snapshot['funds_for_new_buys']:,.2f}")
+                logger.info(f"Account Value: ${account_snapshot.net_liquidation:,.2f}")
+                logger.info(f"Total Cash: ${account_snapshot.total_cash:,.2f}")
+                logger.info(f"Available Funds: ${account_snapshot.available_funds:,.2f}")
+                logger.info(f"Settled Cash: ${account_snapshot.settled_cash:,.2f}")
+                logger.info(f"Funds for New Buys: ${account_snapshot.funds_for_new_buys:,.2f}")
                 logger.info(f"Open Positions: {len(positions)}")
                 
                 # Reset daily stats and seed opening account value for P&L tracking
                 self.strategy.reset_daily_stats()
                 self.risk_manager.reset_daily_stats()
-                self.opening_account_value = account_snapshot.get('net_liquidation')
+                self.opening_account_value = account_snapshot.net_liquidation
                 self.strategy.daily_profit_loss = 0
                 self.risk_manager.update_daily_pnl(0)
                 
@@ -697,12 +703,15 @@ class TradingEngine:
 
                 positions = self.ib_connection.get_positions()
                 account_snapshot = self.ib_connection.get_account_snapshot()
+                if isinstance(account_snapshot, dict):
+                    from core.models import AccountSnapshot
+                    account_snapshot = AccountSnapshot(**account_snapshot)
                 daily_pnl = self._update_daily_pnl()
                 position_info = self.risk_manager.get_position_info()
                 
-                logger.info(f"Final Account Value: ${account_snapshot['net_liquidation']:,.2f}")
-                logger.info(f"Final Total Cash: ${account_snapshot['total_cash']:,.2f}")
-                logger.info(f"Final Funds for New Buys: ${account_snapshot['funds_for_new_buys']:,.2f}")
+                logger.info(f"Final Account Value: ${account_snapshot.net_liquidation:,.2f}")
+                logger.info(f"Final Total Cash: ${account_snapshot.total_cash:,.2f}")
+                logger.info(f"Final Funds for New Buys: ${account_snapshot.funds_for_new_buys:,.2f}")
                 logger.info(f"Daily Trades: {self.strategy.daily_trades}")
                 logger.info(f"Daily P&L: ${daily_pnl:,.2f}")
                 logger.info(f"Open Positions: {position_info['num_positions']}")

@@ -75,8 +75,11 @@ def test_one_cycle():
 
     print("OK: Connected — account %s" % config.IB_ACCOUNT)
     snap = engine.ib_connection.get_account_snapshot()
-    print("  Net liquidation: $%s" % f"{snap['net_liquidation']:,.2f}")
-    print("  Funds for buys:  $%s" % f"{snap['funds_for_new_buys']:,.2f}")
+    if isinstance(snap, dict):
+        from core.models import AccountSnapshot
+        snap = AccountSnapshot(**snap)
+    print("  Net liquidation: $%s" % f"{snap.net_liquidation:,.2f}")
+    print("  Funds for buys:  $%s" % f"{snap.funds_for_new_buys:,.2f}")
     print("  Market open:     %s" % is_market_open())
 
     try:

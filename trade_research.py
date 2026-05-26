@@ -30,6 +30,9 @@ class TradeResearch:
         ib_connection.refresh_account_data()
         positions = ib_connection.get_positions()
         account = ib_connection.get_account_snapshot()
+        if isinstance(account, dict):
+            from core.models import AccountSnapshot
+            account = AccountSnapshot(**account)
 
         watchlist = stock_screener.get_watchlist(config.WATCHLIST_METHOD)
         signals = strategy.generate_signals(watchlist) if watchlist else {}
@@ -74,8 +77,8 @@ class TradeResearch:
             "on_hold": holds,
             "open_positions": position_analysis,
             "account": {
-                "net_liquidation": account.get("net_liquidation"),
-                "funds_for_buys": account.get("funds_for_new_buys"),
+                "net_liquidation": account.net_liquidation,
+                "funds_for_buys": account.funds_for_new_buys,
             },
         }
 
